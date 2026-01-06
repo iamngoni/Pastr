@@ -28,10 +28,16 @@ final class PinnedStore {
             return []
         }
         return results.compactMap { clip in
-            ClipboardItem(
-                id: clip.id,
-                createdAt: clip.createdAt,
-                type: ClipboardItemType(rawValue: clip.type) ?? .other,
+            guard let id = clip.id,
+                  let createdAt = clip.createdAt,
+                  let type = clip.type,
+                  let fingerprint = clip.fingerprint else {
+                return nil
+            }
+            return ClipboardItem(
+                id: id,
+                createdAt: createdAt,
+                type: ClipboardItemType(rawValue: type) ?? .other,
                 textContent: clip.textContent,
                 rtfData: clip.rtfData,
                 imageData: clip.imageData,
@@ -42,7 +48,7 @@ final class PinnedStore {
                 isPinned: true,
                 pinnedTitle: clip.pinnedTitle,
                 typesData: Self.decodeTypesData(clip.typesArchive),
-                fingerprint: clip.fingerprint
+                fingerprint: fingerprint
             )
         }
     }

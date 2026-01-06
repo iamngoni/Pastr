@@ -36,11 +36,11 @@ final class SettingsStore: ObservableObject {
     private let defaults = UserDefaults.standard
 
     private init() {
-        historyMaxItems = defaults.integer(forKey: Keys.historyMaxItems)
-        if historyMaxItems == 0 { historyMaxItems = 100 }
+        let storedMaxItems = defaults.integer(forKey: Keys.historyMaxItems)
+        historyMaxItems = storedMaxItems == 0 ? 100 : storedMaxItems
 
-        historyMaxDays = defaults.integer(forKey: Keys.historyMaxDays)
-        if historyMaxDays == 0 { historyMaxDays = 30 }
+        let storedMaxDays = defaults.integer(forKey: Keys.historyMaxDays)
+        historyMaxDays = storedMaxDays == 0 ? 30 : storedMaxDays
 
         historyUnlimited = defaults.bool(forKey: Keys.historyUnlimited)
 
