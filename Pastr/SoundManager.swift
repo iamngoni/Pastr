@@ -6,7 +6,7 @@ enum SoundManager {
 
     static func playCopySound() {
         guard SettingsStore.shared.playSoundEffects else { return }
-        playSound(named: "Pop")
+        playSound(named: "Frog")
     }
 
     static func playPinSound() {
