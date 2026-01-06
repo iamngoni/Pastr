@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import Foundation
 import LinkPresentation
+import UniformTypeIdentifiers
 
 final class LinkPreviewService: ObservableObject {
     static let shared = LinkPreviewService()
@@ -32,7 +33,7 @@ final class LinkPreviewService: ObservableObject {
         inFlightRequests.insert(urlString)
 
         let provider = LPMetadataProvider()
-        provider.startFetchingMetadata(for: url) { [weak self] metadata, _ in
+        provider.startFetchingMetadata(for: url) { [weak self] metadata, error in
             guard let self = self else { return }
 
             DispatchQueue.main.async {
@@ -45,7 +46,6 @@ final class LinkPreviewService: ObservableObject {
                         siteName: self.extractDomain(from: urlString)
                     )
 
-                    self.cache.setObject(preview, forKey: urlString as NSString)
                     self.previews[urlString] = preview
 
                     // Load the main preview image (Open Graph image)
@@ -63,7 +63,6 @@ final class LinkPreviewService: ObservableObject {
                         title: nil,
                         siteName: self.extractDomain(from: urlString)
                     )
-                    self.cache.setObject(preview, forKey: urlString as NSString)
                     self.previews[urlString] = preview
                 }
             }
@@ -71,19 +70,61 @@ final class LinkPreviewService: ObservableObject {
     }
 
     private func loadImage(from provider: NSItemProvider, for urlString: String, isIcon: Bool) {
-        provider.loadObject(ofClass: NSImage.self) { [weak self] image, _ in
-            guard let self = self, let nsImage = image as? NSImage else { return }
-
-            DispatchQueue.main.async {
-                if var preview = self.previews[urlString] {
-                    if isIcon {
-                        preview.icon = nsImage
-                    } else {
-                        preview.image = nsImage
-                    }
-                    self.previews[urlString] = preview
-                    self.cache.setObject(preview, forKey: urlString as NSString)
+        // Try loading as NSImage first
+        if provider.canLoadObject(ofClass: NSImage.self) {
+            provider.loadObject(ofClass: NSImage.self) { [weak self] image, error in
+                if let nsImage = image as? NSImage {
+                    self?.updatePreview(urlString: urlString, image: nsImage, isIcon: isIcon)
+                    return
                 }
+                // If NSImage fails, try data approach
+                self?.loadImageAsData(from: provider, for: urlString, isIcon: isIcon)
+            }
+        } else {
+            // Try loading as raw data
+            loadImageAsData(from: provider, for: urlString, isIcon: isIcon)
+        }
+    }
+
+    private func loadImageAsData(from provider: NSItemProvider, for urlString: String, isIcon: Bool) {
+        // Try common image types
+        let imageTypes = [
+            UTType.png.identifier,
+            UTType.jpeg.identifier,
+            UTType.gif.identifier,
+            UTType.webP.identifier,
+            UTType.image.identifier,
+            "public.image"
+        ]
+
+        for typeIdentifier in imageTypes {
+            if provider.hasItemConformingToTypeIdentifier(typeIdentifier) {
+                provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] data, error in
+                    guard let data = data, let nsImage = NSImage(data: data) else { return }
+                    self?.updatePreview(urlString: urlString, image: nsImage, isIcon: isIcon)
+                }
+                return
+            }
+        }
+
+        // Last resort: try loading file representation
+        provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { [weak self] url, error in
+            guard let url = url, let nsImage = NSImage(contentsOf: url) else { return }
+            self?.updatePreview(urlString: urlString, image: nsImage, isIcon: isIcon)
+        }
+    }
+
+    private func updatePreview(urlString: String, image: NSImage, isIcon: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if var preview = self.previews[urlString] {
+                if isIcon {
+                    preview.icon = image
+                } else {
+                    preview.image = image
+                }
+                self.previews[urlString] = preview
+                self.cache.setObject(preview, forKey: urlString as NSString)
             }
         }
     }
