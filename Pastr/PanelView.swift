@@ -178,6 +178,7 @@ private struct ClipboardCardView: View {
     let item: ClipboardItem
     let isSelected: Bool
     let onTogglePin: () -> Void
+    @ObservedObject private var linkService = LinkPreviewService.shared
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -253,10 +254,7 @@ private struct ClipboardCardView: View {
                                 .lineLimit(4)
                         }
                     case .link:
-                        Text(item.previewText)
-                            .font(.system(size: 12))
-                            .foregroundColor(.white)
-                            .lineLimit(3)
+                        LinkPreviewCard(urlString: item.urlString ?? item.previewText)
                     case .file:
                         Text(item.previewText)
                             .font(.system(size: 12))
@@ -362,6 +360,92 @@ final class ArrowPassingTextField: NSTextField {
             onArrowRight?()
         default:
             super.keyDown(with: event)
+        }
+    }
+}
+
+// MARK: - Link Preview Card
+
+private struct LinkPreviewCard: View {
+    let urlString: String
+    @ObservedObject private var linkService = LinkPreviewService.shared
+
+    private var preview: LinkPreview? {
+        linkService.preview(for: urlString)
+    }
+
+    private var domain: String {
+        guard let url = URL(string: urlString), let host = url.host else {
+            return urlString
+        }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Favicon and domain row
+            HStack(spacing: 8) {
+                if let icon = preview?.icon {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 32, height: 32)
+                        .cornerRadius(6)
+                        .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+                } else {
+                    // Placeholder favicon
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(red: 0.3, green: 0.5, blue: 0.9), Color(red: 0.5, green: 0.3, blue: 0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Image(systemName: "link")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(domain)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+
+                    if let title = preview?.title, !title.isEmpty {
+                        Text(title)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.6))
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+            }
+
+            // Title (if available and longer)
+            if let title = preview?.title, !title.isEmpty {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // URL
+            Text(urlString)
+                .font(.system(size: 10))
+                .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1))
+                .lineLimit(2)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            linkService.fetchPreview(for: urlString)
         }
     }
 }
