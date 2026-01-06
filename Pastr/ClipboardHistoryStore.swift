@@ -30,6 +30,7 @@ final class ClipboardHistoryStore: ObservableObject {
 
         prune()
         persistence.save(items)
+        SoundManager.playCopySound()
     }
 
     func items(for section: PanelSection) -> [ClipboardItem] {

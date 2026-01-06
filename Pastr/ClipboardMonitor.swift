@@ -31,9 +31,22 @@ final class ClipboardMonitor {
 
     private func capturePasteboardItem() {
         guard let pasteboardItem = pasteboard.pasteboardItems?.first else { return }
-        let frontmost = NSWorkspace.shared.frontmostApplication
-        let bundleId = frontmost?.bundleIdentifier
-        let appName = frontmost?.localizedName
+
+        // Check if this is a Universal Clipboard item from another device
+        let isUniversalClipboard = isFromUniversalClipboard(pasteboardItem)
+
+        var bundleId: String?
+        var appName: String?
+
+        if isUniversalClipboard {
+            // Don't attribute to frontmost app if it came from another device
+            bundleId = nil
+            appName = "Another Device"
+        } else {
+            let frontmost = NSWorkspace.shared.frontmostApplication
+            bundleId = frontmost?.bundleIdentifier
+            appName = frontmost?.localizedName
+        }
 
         if bundleId == Bundle.main.bundleIdentifier {
             return
@@ -47,6 +60,25 @@ final class ClipboardMonitor {
         )
 
         historyStore.add(item)
+    }
+
+    private func isFromUniversalClipboard(_ item: NSPasteboardItem) -> Bool {
+        // Check for Apple's Universal Clipboard marker types
+        let types = item.types
+
+        // Universal Clipboard items often have these markers
+        let universalClipboardMarkers: [NSPasteboard.PasteboardType] = [
+            NSPasteboard.PasteboardType("com.apple.is-remote-clipboard"),
+            NSPasteboard.PasteboardType("com.apple.CloudDocs.UTI")
+        ]
+
+        for marker in universalClipboardMarkers {
+            if types.contains(marker) {
+                return true
+            }
+        }
+
+        return false
     }
 
     private static func makeClipboardItem(
