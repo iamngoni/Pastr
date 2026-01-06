@@ -46,6 +46,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onUpdatePinnedTitle: { [weak self] item, title in
                 self?.historyStore.updatePinnedTitle(for: item, title: title)
             },
+            onDelete: { [weak self] items in
+                self?.historyStore.delete(items)
+            },
             onOpenSettings: { [weak self] in
                 self?.showSettings()
             }
@@ -144,13 +147,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 680, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 520),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
         window.title = "Pastr Settings"
         window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.backgroundColor = NSColor(red: 0.11, green: 0.11, blue: 0.118, alpha: 1)
         window.contentView = NSHostingView(rootView: settingsView)
         window.center()

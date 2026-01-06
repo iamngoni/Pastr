@@ -11,6 +11,13 @@ enum SoundManager {
 
     static func playPinSound() {
         guard SettingsStore.shared.playSoundEffects else { return }
+        playSound(named: "Tink")
+    }
+
+    private static func playSound(named name: String) {
+        guard let sound = NSSound(named: name) else { return }
+        sound.volume = soundVolume
+        sound.play()
     }
 
     private static func playSound(named name: String) {

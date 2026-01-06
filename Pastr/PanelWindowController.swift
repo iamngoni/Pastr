@@ -13,6 +13,7 @@ final class PanelWindowController {
     private let onOpenLink: (ClipboardItem) -> Void
     private let onRevealInFinder: (ClipboardItem) -> Void
     private let onUpdatePinnedTitle: (ClipboardItem, String) -> Void
+    private let onDelete: ([ClipboardItem]) -> Void
     private let onOpenSettings: () -> Void
     private var clickMonitor: Any?
     private var keyMonitor: Any?
@@ -30,6 +31,7 @@ final class PanelWindowController {
         onOpenLink: @escaping (ClipboardItem) -> Void,
         onRevealInFinder: @escaping (ClipboardItem) -> Void,
         onUpdatePinnedTitle: @escaping (ClipboardItem, String) -> Void,
+        onDelete: @escaping ([ClipboardItem]) -> Void,
         onOpenSettings: @escaping () -> Void
     ) {
         self.historyStore = historyStore
@@ -40,6 +42,7 @@ final class PanelWindowController {
         self.onOpenLink = onOpenLink
         self.onRevealInFinder = onRevealInFinder
         self.onUpdatePinnedTitle = onUpdatePinnedTitle
+        self.onDelete = onDelete
         self.onOpenSettings = onOpenSettings
         self.viewModel = PanelViewModel(historyStore: historyStore)
 
@@ -65,6 +68,7 @@ final class PanelWindowController {
             onOpenLink: onOpenLink,
             onRevealInFinder: onRevealInFinder,
             onUpdatePinnedTitle: onUpdatePinnedTitle,
+            onDelete: onDelete,
             onOpenSettings: onOpenSettings
         )
         panel.contentView = NSHostingView(rootView: rootView)
@@ -139,19 +143,33 @@ final class PanelWindowController {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
+
+            // Handle Cmd+A for select all
+            if event.modifierFlags.contains(.command) && event.keyCode == 0 {
+                self.viewModel.selectAll()
+                return nil
+            }
+
             switch event.keyCode {
-            case 123:
+            case 123: // Left arrow
                 self.viewModel.selectPrevious()
                 return nil
-            case 124:
+            case 124: // Right arrow
                 self.viewModel.selectNext()
                 return nil
-            case 36, 76:
+            case 36, 76: // Enter/Return
                 if let item = self.viewModel.selectedItem {
                     self.onSelect(item)
                 }
                 return nil
-            case 53:
+            case 51, 117: // Delete (backspace) or Forward Delete
+                let itemsToDelete = self.viewModel.selectedItems
+                if !itemsToDelete.isEmpty {
+                    self.onDelete(itemsToDelete)
+                    self.viewModel.clearMultiSelection()
+                }
+                return nil
+            case 53: // Escape
                 self.hidePanel()
                 return nil
             default:
