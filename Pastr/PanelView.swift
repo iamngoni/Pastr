@@ -168,7 +168,8 @@ private struct ClipboardCardView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
+                // First row: App info and pin button space
                 HStack(spacing: 6) {
                     if let icon = item.sourceAppIcon {
                         Image(nsImage: icon)
@@ -185,7 +186,11 @@ private struct ClipboardCardView: View {
                     }
 
                     Spacer()
+                }
+                .padding(.trailing, 32) // Space for pin button
 
+                // Second row: Type and time
+                HStack(spacing: 6) {
                     Text(item.type.label)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.white.opacity(0.6))
@@ -193,6 +198,8 @@ private struct ClipboardCardView: View {
                     Text(item.relativeTime)
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.5))
+
+                    Spacer()
                 }
 
                 Group {
