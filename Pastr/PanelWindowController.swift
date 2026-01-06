@@ -41,7 +41,7 @@ final class PanelWindowController {
         self.viewModel = PanelViewModel(historyStore: historyStore)
 
         let panel = PastrPanel(
-            contentRect: .init(x: 0, y: 0, width: 900, height: 200),
+            contentRect: .init(x: 0, y: 0, width: 900, height: 230),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -105,7 +105,7 @@ final class PanelWindowController {
 
     private func panelFrame(for screen: NSScreen) -> NSRect {
         let margin: CGFloat = 18
-        let height: CGFloat = 200
+        let height: CGFloat = 230
         let width = screen.visibleFrame.width - margin * 2
         let x = screen.visibleFrame.minX + margin
         let y = screen.visibleFrame.minY + margin

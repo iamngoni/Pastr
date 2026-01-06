@@ -1,4 +1,5 @@
 import AppKit
+import Foundation
 
 struct ClipboardItem: Identifiable, Hashable {
     let id: UUID
@@ -47,6 +48,17 @@ struct ClipboardItem: Identifiable, Hashable {
 
     var relativeTime: String {
         RelativeDateTimeFormatter.shared.localizedString(for: createdAt, relativeTo: Date())
+    }
+
+    var attributedPreview: AttributedString? {
+        guard let rtfData else { return nil }
+        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+            .documentType: NSAttributedString.DocumentType.rtf
+        ]
+        guard let nsAttributed = try? NSAttributedString(data: rtfData, options: options, documentAttributes: nil) else {
+            return nil
+        }
+        return AttributedString(nsAttributed)
     }
 
     var image: NSImage? {
