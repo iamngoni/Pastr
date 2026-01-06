@@ -1,24 +1,6 @@
 import Carbon.HIToolbox
 import SwiftUI
 
-// MARK: - Settings Section Enum
-
-enum SettingsSection: String, CaseIterable, Identifiable {
-    case general = "General"
-    case privacy = "Privacy"
-    case shortcuts = "Shortcuts"
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .general: return "gearshape"
-        case .privacy: return "lock.shield"
-        case .shortcuts: return "command"
-        }
-    }
-}
-
 // MARK: - Main Settings View
 
 struct SettingsView: View {
@@ -26,207 +8,211 @@ struct SettingsView: View {
     @ObservedObject var historyStore: ClipboardHistoryStore
     let hotKeyManager: HotKeyManager
 
-    @State private var selectedSection: SettingsSection = .general
     @State private var showClearHistoryAlert = false
+    @State private var showAppPicker = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-            contentArea
-        }
-        .background(Color(nsColor: NSColor(red: 0.11, green: 0.11, blue: 0.118, alpha: 1)))
-        .frame(width: 600, height: 520)
-    }
+        ZStack {
+            // Background
+            Color(nsColor: NSColor(red: 0.11, green: 0.11, blue: 0.118, alpha: 1))
+                .ignoresSafeArea()
 
-    // MARK: - Sidebar
-
-    private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Navigation items
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(SettingsSection.allCases) { section in
-                    SidebarButton(
-                        title: section.rawValue,
-                        icon: section.icon,
-                        isSelected: selectedSection == section
-                    ) {
-                        selectedSection = section
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    HStack {
+                        Text("Settings")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                        Spacer()
                     }
-                }
-            }
-            .padding(.top, 12)
 
-            Spacer()
+                    // General Section
+                    SettingsSection(title: "General") {
+                        SettingsToggleRow(
+                            title: "Launch at login",
+                            subtitle: "Start Pastr when you log in to your Mac",
+                            isOn: $settings.launchAtLogin
+                        )
 
-            // Help Center
-            Button {
-                if let url = URL(string: "https://github.com/iamngoni/Pastr") {
-                    NSWorkspace.shared.open(url)
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "questionmark.circle")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(white: 0.5))
+                        SettingsToggleRow(
+                            title: "Show in menu bar",
+                            subtitle: "Display Pastr icon in the menu bar",
+                            isOn: $settings.showInMenuBar
+                        )
 
-                    Text("Help Center")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(white: 0.5))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 16)
-        }
-        .frame(width: 160)
-        .background(Color(nsColor: NSColor(red: 0.09, green: 0.09, blue: 0.095, alpha: 1)))
-    }
+                        SettingsToggleRow(
+                            title: "Sound effects",
+                            subtitle: "Play sounds for copy and paste actions",
+                            isOn: $settings.playSoundEffects
+                        )
+                    }
 
-    // MARK: - Content Area
+                    // Privacy Section
+                    SettingsSection(title: "Privacy") {
+                        SettingsToggleRow(
+                            title: "Show during screen sharing",
+                            subtitle: "Allow Pastr to appear when you share your screen",
+                            isOn: $settings.showDuringScreenSharing
+                        )
 
-    private var contentArea: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Header
-                Text(selectedSection.rawValue)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.bottom, 24)
+                        SettingsToggleRow(
+                            title: "Generate link previews",
+                            subtitle: "Download web content for previews",
+                            isOn: $settings.generateLinkPreviews
+                        )
 
-                // Content based on selected section
-                switch selectedSection {
-                case .general:
-                    generalSection
-                case .privacy:
-                    privacySection
-                case .shortcuts:
-                    shortcutsSection
-                }
-            }
-            .padding(24)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
+                        SettingsToggleRow(
+                            title: "Ignore confidential content",
+                            subtitle: "Skip passwords and sensitive data from password managers",
+                            isOn: $settings.ignoreConfidentialContent
+                        )
 
-    // MARK: - General Section
+                        SettingsToggleRow(
+                            title: "Ignore transient content",
+                            subtitle: "Skip temporary data generated by other apps",
+                            isOn: $settings.ignoreTransientContent
+                        )
 
-    private var generalSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Basic settings toggles
-            SettingsToggleRow(
-                title: "Open at login",
-                isOn: $settings.launchAtLogin
-            )
+                        Divider()
+                            .background(Color.white.opacity(0.1))
 
-            SettingsToggleRow(
-                title: "Run in background",
-                isOn: $settings.showInMenuBar
-            )
+                        // Ignored Applications
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Ignored Applications")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(Color(white: 0.85))
 
-            SettingsToggleRow(
-                title: "iCloud sync",
-                subtitle: settings.iCloudSyncEnabled ? "Synced now" : nil,
-                isOn: $settings.iCloudSyncEnabled
-            )
+                            Text("Content copied from these apps won't be saved")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(white: 0.5))
 
-            SettingsToggleRow(
-                title: "Sound effects",
-                isOn: $settings.playSoundEffects
-            )
-
-            Divider()
-                .background(Color.white.opacity(0.1))
-                .padding(.vertical, 8)
-
-            // Paste Items section
-            Text("Paste Items")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(.bottom, 8)
-
-            VStack(alignment: .leading, spacing: 12) {
-                PasteOptionRow(
-                    title: "To active app",
-                    subtitle: "Paste selected items directly to the application you are currently using.",
-                    isSelected: true,
-                    icon: "app.badge.checkmark"
-                )
-
-                PasteOptionRow(
-                    title: "To clipboard",
-                    subtitle: "Copy selected items to the system clipboard to paste manually later.",
-                    isSelected: false,
-                    icon: "doc.on.clipboard"
-                )
-
-                HStack {
-                    Image(systemName: "circle")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color(white: 0.4))
-                        .frame(width: 20)
-
-                    Text("Always paste as Plain Text")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(white: 0.6))
-                }
-                .padding(.top, 4)
-            }
-
-            Divider()
-                .background(Color.white.opacity(0.1))
-                .padding(.vertical, 8)
-
-            // Keep History section
-            Text("Keep History")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(.bottom, 8)
-
-            HistoryDurationPicker(
-                selectedDuration: Binding(
-                    get: {
-                        if settings.historyUnlimited { return .forever }
-                        switch settings.historyMaxDays {
-                        case 1: return .day
-                        case 7: return .week
-                        case 30: return .month
-                        case 365: return .year
-                        default: return .month
-                        }
-                    },
-                    set: { newValue in
-                        switch newValue {
-                        case .day:
-                            settings.historyUnlimited = false
-                            settings.historyMaxDays = 1
-                        case .week:
-                            settings.historyUnlimited = false
-                            settings.historyMaxDays = 7
-                        case .month:
-                            settings.historyUnlimited = false
-                            settings.historyMaxDays = 30
-                        case .year:
-                            settings.historyUnlimited = false
-                            settings.historyMaxDays = 365
-                        case .forever:
-                            settings.historyUnlimited = true
+                            IgnoredAppsListView(settings: settings, showAppPicker: $showAppPicker)
                         }
                     }
-                )
-            )
 
-            // Erase History button
-            HStack {
-                Spacer()
-                Button("Erase History...") {
-                    showClearHistoryAlert = true
+                    // History Section
+                    SettingsSection(title: "History") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Keep history for")
+                                .font(.system(size: 13))
+                                .foregroundColor(Color(white: 0.7))
+
+                            HistoryDurationPicker(
+                                selectedDuration: Binding(
+                                    get: {
+                                        if settings.historyUnlimited { return .forever }
+                                        switch settings.historyMaxDays {
+                                        case 1: return .day
+                                        case 7: return .week
+                                        case 30: return .month
+                                        case 365: return .year
+                                        default: return .month
+                                        }
+                                    },
+                                    set: { newValue in
+                                        switch newValue {
+                                        case .day:
+                                            settings.historyUnlimited = false
+                                            settings.historyMaxDays = 1
+                                        case .week:
+                                            settings.historyUnlimited = false
+                                            settings.historyMaxDays = 7
+                                        case .month:
+                                            settings.historyUnlimited = false
+                                            settings.historyMaxDays = 30
+                                        case .year:
+                                            settings.historyUnlimited = false
+                                            settings.historyMaxDays = 365
+                                        case .forever:
+                                            settings.historyUnlimited = true
+                                        }
+                                    }
+                                )
+                            )
+                        }
+
+                        HStack {
+                            Spacer()
+                            Button("Clear History") {
+                                showClearHistoryAlert = true
+                            }
+                            .buttonStyle(DestructiveButtonStyle())
+                        }
+                        .padding(.top, 8)
+                    }
+
+                    // Keyboard Shortcut Section
+                    SettingsSection(title: "Keyboard Shortcut") {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Activate Pastr")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Color(white: 0.85))
+
+                                Text("Press this shortcut to open clipboard history")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color(white: 0.5))
+                            }
+
+                            Spacer()
+
+                            HotKeyRecorderView(
+                                keyCode: $settings.hotKeyKeyCode,
+                                modifiers: $settings.hotKeyModifiers
+                            ) {
+                                hotKeyManager.register(keyCode: settings.hotKeyKeyCode, modifiers: settings.hotKeyModifiers)
+                            }
+                            .frame(width: 120, height: 28)
+                        }
+
+                        HStack {
+                            Text("Reset to default")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(white: 0.5))
+
+                            Spacer()
+
+                            Button("⌘B") {
+                                settings.hotKeyKeyCode = UInt32(kVK_ANSI_B)
+                                settings.hotKeyModifiers = UInt32(cmdKey)
+                                hotKeyManager.register(keyCode: settings.hotKeyKeyCode, modifiers: settings.hotKeyModifiers)
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                        }
+                    }
+
+                    // About Section
+                    SettingsSection(title: "About") {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Pastr")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(Color(white: 0.85))
+
+                                Text("Version 1.0")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color(white: 0.5))
+                            }
+
+                            Spacer()
+
+                            Button("View on GitHub") {
+                                if let url = URL(string: "https://github.com/iamngoni/Pastr") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                        }
+                    }
+
+                    Spacer(minLength: 20)
                 }
-                .buttonStyle(SecondaryButtonStyle())
+                .padding(32)
             }
-            .padding(.top, 8)
         }
-        .alert("Erase History", isPresented: $showClearHistoryAlert) {
+        .frame(width: 480, height: 640)
+        .alert("Clear History", isPresented: $showClearHistoryAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Erase", role: .destructive) {
                 historyStore.clearUnpinnedItems()
@@ -234,167 +220,324 @@ struct SettingsView: View {
         } message: {
             Text("This will remove all non-pinned clipboard items. This action cannot be undone.")
         }
-    }
-
-    // MARK: - Privacy Section
-
-    private var privacySection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            SettingsToggleRow(
-                title: "Show during screen sharing",
-                subtitle: "Allow Pastr to appear to others when you share your screen.",
-                isOn: .constant(true)
-            )
-
-            SettingsToggleRow(
-                title: "Generate link previews",
-                subtitle: "Download web content for previews; may activate one-time or analytics-sensitive links.",
-                isOn: .constant(true)
-            )
-
-            SettingsToggleRow(
-                title: "Ignore confidential content",
-                subtitle: "Do not save passwords and sensitive data when detected.",
-                isOn: .constant(true)
-            )
-
-            SettingsToggleRow(
-                title: "Ignore transient content",
-                subtitle: "Do not save temporary data generated by other apps.",
-                isOn: .constant(true)
-            )
-
-            Divider()
-                .background(Color.white.opacity(0.1))
-                .padding(.vertical, 8)
-
-            // Ignore Applications section
-            Text("Ignore Applications")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
-
-            Text("Do not save content copied from the applications below.")
-                .font(.system(size: 12))
-                .foregroundColor(Color(white: 0.5))
-                .padding(.bottom, 8)
-
-            VStack(spacing: 0) {
-                IgnoredAppRow(appName: "Keychain Access", bundleId: "com.apple.keychainaccess")
-                Divider().background(Color.white.opacity(0.05))
-                IgnoredAppRow(appName: "Passwords", bundleId: "com.apple.Passwords")
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(0.05))
-            )
-
-            // Add/Remove buttons
-            HStack(spacing: 8) {
-                Button("+") {}
-                    .buttonStyle(SmallIconButtonStyle())
-
-                Button("−") {}
-                    .buttonStyle(SmallIconButtonStyle())
-            }
+        .sheet(isPresented: $showAppPicker) {
+            AppPickerView(settings: settings, isPresented: $showAppPicker)
         }
     }
+}
 
-    // MARK: - Shortcuts Section
+// MARK: - Ignored Apps List View
 
-    private var shortcutsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ShortcutRow(
-                title: "Activate Pastr",
-                keyCode: $settings.hotKeyKeyCode,
-                modifiers: $settings.hotKeyModifiers,
-                hotKeyManager: hotKeyManager
-            )
+struct IgnoredAppsListView: View {
+    @ObservedObject var settings: SettingsStore
+    @Binding var showAppPicker: Bool
 
-            Divider()
-                .background(Color.white.opacity(0.1))
-                .padding(.vertical, 4)
+    var body: some View {
+        VStack(spacing: 0) {
+            if settings.ignoredAppBundleIds.isEmpty {
+                Text("No ignored applications")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+            } else {
+                ForEach(settings.ignoredAppBundleIds, id: \.self) { bundleId in
+                    IgnoredAppRow(bundleId: bundleId) {
+                        settings.removeIgnoredApp(bundleId)
+                    }
 
-            // Quick Paste info
-            HStack {
-                Text("Quick Paste")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(white: 0.7))
-
-                Spacer()
-
-                HStack(spacing: 4) {
-                    KeyboardKey(text: "⌘")
-                    Text("Command")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(white: 0.5))
-                    Text("+ 1...9")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(white: 0.5))
+                    if bundleId != settings.ignoredAppBundleIds.last {
+                        Divider()
+                            .background(Color.white.opacity(0.05))
+                    }
                 }
             }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+        )
 
-            HStack {
-                Text("Plain Text mode")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(white: 0.7))
-
-                Spacer()
-
-                HStack(spacing: 4) {
-                    KeyboardKey(text: "⇧")
-                    Text("Shift")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(white: 0.5))
-                }
+        // Add/Remove buttons
+        HStack(spacing: 8) {
+            Button {
+                showAppPicker = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .medium))
             }
+            .buttonStyle(SmallIconButtonStyle())
+
+            Spacer()
+        }
+        .padding(.top, 8)
+    }
+}
+
+// MARK: - Ignored App Row
+
+struct IgnoredAppRow: View {
+    let bundleId: String
+    let onRemove: () -> Void
+
+    private var appInfo: (name: String, icon: NSImage) {
+        // Try to get app info from bundle ID
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+            let appName = FileManager.default.displayName(atPath: appURL.path)
+            let icon = NSWorkspace.shared.icon(forFile: appURL.path)
+            return (appName, icon)
+        }
+
+        // Fallback for known system apps
+        let knownApps: [String: String] = [
+            "com.apple.keychainaccess": "Keychain Access",
+            "com.apple.Passwords": "Passwords",
+            "com.agilebits.onepassword7": "1Password 7",
+            "com.1password.1password": "1Password",
+            "com.lastpass.LastPass": "LastPass",
+            "com.bitwarden.desktop": "Bitwarden"
+        ]
+
+        let name = knownApps[bundleId] ?? bundleId
+        let fallbackIcon = NSImage(systemSymbolName: "app.fill", accessibilityDescription: nil) ?? NSImage()
+        return (name, fallbackIcon)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(nsImage: appInfo.icon)
+                .resizable()
+                .frame(width: 24, height: 24)
+
+            Text(appInfo.name)
+                .font(.system(size: 13))
+                .foregroundColor(Color(white: 0.85))
 
             Spacer()
 
-            // Reset button
+            Button {
+                onRemove()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color(white: 0.5))
+            }
+            .buttonStyle(.plain)
+            .opacity(0.6)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+}
+
+// MARK: - App Picker View
+
+struct AppPickerView: View {
+    @ObservedObject var settings: SettingsStore
+    @Binding var isPresented: Bool
+    @State private var searchText = ""
+    @State private var installedApps: [AppInfo] = []
+
+    struct AppInfo: Identifiable, Hashable {
+        let id = UUID()
+        let bundleId: String
+        let name: String
+        let icon: NSImage
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(bundleId)
+        }
+
+        static func == (lhs: AppInfo, rhs: AppInfo) -> Bool {
+            lhs.bundleId == rhs.bundleId
+        }
+    }
+
+    var filteredApps: [AppInfo] {
+        if searchText.isEmpty {
+            return installedApps
+        }
+        return installedApps.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            $0.bundleId.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Add Ignored Application")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button {
+                    isPresented = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color(white: 0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(16)
+
+            // Search field
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(Color(white: 0.5))
+                TextField("Search applications...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .foregroundColor(.white)
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(0.08))
+            )
+            .padding(.horizontal, 16)
+
+            // App list
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredApps) { app in
+                        let isIgnored = settings.ignoredAppBundleIds.contains(app.bundleId)
+
+                        Button {
+                            if isIgnored {
+                                settings.removeIgnoredApp(app.bundleId)
+                            } else {
+                                settings.addIgnoredApp(app.bundleId)
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(nsImage: app.icon)
+                                    .resizable()
+                                    .frame(width: 32, height: 32)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(app.name)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.white)
+
+                                    Text(app.bundleId)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(Color(white: 0.5))
+                                }
+
+                                Spacer()
+
+                                if isIgnored {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(Color(red: 0.04, green: 0.52, blue: 1))
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.white.opacity(0.001)) // For hit testing
+                        }
+                        .buttonStyle(.plain)
+
+                        Divider()
+                            .background(Color.white.opacity(0.05))
+                    }
+                }
+            }
+            .frame(height: 300)
+
+            // Done button
             HStack {
                 Spacer()
-                Button("Reset shortcuts to default...") {
-                    settings.hotKeyKeyCode = 9 // V key
-                    settings.hotKeyModifiers = UInt32(cmdKey | shiftKey)
-                    hotKeyManager.register(keyCode: settings.hotKeyKeyCode, modifiers: settings.hotKeyModifiers)
+                Button("Done") {
+                    isPresented = false
                 }
-                .buttonStyle(SecondaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
+            }
+            .padding(16)
+        }
+        .frame(width: 400)
+        .background(Color(nsColor: NSColor(red: 0.11, green: 0.11, blue: 0.118, alpha: 1)))
+        .onAppear {
+            loadInstalledApps()
+        }
+    }
+
+    private func loadInstalledApps() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            var apps: [AppInfo] = []
+
+            let appDirectories = [
+                "/Applications",
+                "/System/Applications",
+                "/System/Applications/Utilities",
+                NSHomeDirectory() + "/Applications"
+            ]
+
+            for directory in appDirectories {
+                guard let contents = try? FileManager.default.contentsOfDirectory(atPath: directory) else { continue }
+
+                for item in contents where item.hasSuffix(".app") {
+                    let appPath = (directory as NSString).appendingPathComponent(item)
+                    let bundlePath = (appPath as NSString).appendingPathComponent("Contents/Info.plist")
+
+                    guard let plist = NSDictionary(contentsOfFile: bundlePath),
+                          let bundleId = plist["CFBundleIdentifier"] as? String else { continue }
+
+                    let appName = (plist["CFBundleDisplayName"] as? String) ??
+                                  (plist["CFBundleName"] as? String) ??
+                                  (item as NSString).deletingPathExtension
+
+                    let icon = NSWorkspace.shared.icon(forFile: appPath)
+
+                    apps.append(AppInfo(bundleId: bundleId, name: appName, icon: icon))
+                }
+            }
+
+            // Sort alphabetically
+            apps.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+            // Remove duplicates
+            var seen = Set<String>()
+            apps = apps.filter { seen.insert($0.bundleId).inserted }
+
+            DispatchQueue.main.async {
+                self.installedApps = apps
             }
         }
     }
 }
 
-// MARK: - Sidebar Button
+// MARK: - Settings Section
 
-struct SidebarButton: View {
+struct SettingsSection<Content: View>: View {
     let title: String
-    let icon: String
-    let isSelected: Bool
-    let action: () -> Void
+    @ViewBuilder let content: Content
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                    .foregroundColor(isSelected ? .white : Color(white: 0.5))
-                    .frame(width: 18)
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color(white: 0.5))
+                .textCase(.uppercase)
+                .tracking(0.5)
 
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(isSelected ? .white : Color(white: 0.5))
-
-                Spacer()
+            VStack(alignment: .leading, spacing: 16) {
+                content
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color(red: 0.2, green: 0.4, blue: 0.9) : Color.clear)
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
             )
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 8)
     }
 }
 
@@ -422,40 +565,8 @@ struct SettingsToggleRow: View {
             Spacer()
 
             Toggle("", isOn: $isOn)
-                .toggleStyle(SwitchToggleStyle(tint: Color(red: 0.2, green: 0.5, blue: 1.0)))
+                .toggleStyle(SwitchToggleStyle(tint: Color(red: 0.04, green: 0.52, blue: 1)))
                 .labelsHidden()
-        }
-    }
-}
-
-// MARK: - Paste Option Row
-
-struct PasteOptionRow: View {
-    let title: String
-    let subtitle: String
-    let isSelected: Bool
-    let icon: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: isSelected ? "circle.inset.filled" : "circle")
-                .font(.system(size: 14))
-                .foregroundColor(isSelected ? Color(red: 0.2, green: 0.5, blue: 1.0) : Color(white: 0.4))
-                .frame(width: 20)
-                .padding(.top, 2)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color(white: 0.85))
-
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(white: 0.5))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
         }
     }
 }
@@ -482,11 +593,11 @@ struct HistoryDurationPicker: View {
                     Text(duration.rawValue)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(selectedDuration == duration ? .white : Color(white: 0.5))
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(selectedDuration == duration ? Color(white: 0.25) : Color.clear)
+                                .fill(selectedDuration == duration ? Color(red: 0.04, green: 0.52, blue: 1) : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)
@@ -494,101 +605,9 @@ struct HistoryDurationPicker: View {
         }
         .padding(4)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.05))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.08))
         )
-    }
-}
-
-// MARK: - Ignored App Row
-
-struct IgnoredAppRow: View {
-    let appName: String
-    let bundleId: String
-
-    private var appIcon: NSImage {
-        if appName == "Keychain Access" {
-            return NSWorkspace.shared.icon(forFile: "/System/Applications/Utilities/Keychain Access.app")
-        } else if appName == "Passwords" {
-            return NSWorkspace.shared.icon(forFile: "/System/Applications/Passwords.app")
-        }
-        return NSImage(systemSymbolName: "app.fill", accessibilityDescription: nil) ?? NSImage()
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(nsImage: appIcon)
-                .resizable()
-                .frame(width: 24, height: 24)
-
-            Text(appName)
-                .font(.system(size: 13))
-                .foregroundColor(Color(white: 0.85))
-
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-    }
-}
-
-// MARK: - Shortcut Row
-
-struct ShortcutRow: View {
-    let title: String
-    @Binding var keyCode: UInt32
-    @Binding var modifiers: UInt32
-    let hotKeyManager: HotKeyManager
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 13))
-                .foregroundColor(Color(white: 0.7))
-
-            Spacer()
-
-            HStack(spacing: 8) {
-                HotKeyRecorderView(
-                    keyCode: $keyCode,
-                    modifiers: $modifiers
-                ) {
-                    hotKeyManager.register(keyCode: keyCode, modifiers: modifiers)
-                }
-                .frame(width: 120, height: 28)
-
-                Button {
-                    // Clear shortcut
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color(white: 0.5))
-                }
-                .buttonStyle(SmallIconButtonStyle())
-            }
-        }
-    }
-}
-
-// MARK: - Keyboard Key
-
-struct KeyboardKey: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundColor(Color(white: 0.7))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.white.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                    )
-            )
     }
 }
 
@@ -609,10 +628,39 @@ struct SecondaryButtonStyle: ButtonStyle {
     }
 }
 
+struct PrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(red: 0.04, green: 0.52, blue: 1))
+            )
+            .opacity(configuration.isPressed ? 0.8 : 1)
+    }
+}
+
+struct DestructiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(Color(red: 1, green: 0.4, blue: 0.4))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(red: 1, green: 0.4, blue: 0.4).opacity(0.15))
+            )
+            .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
 struct SmallIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 14, weight: .medium))
             .foregroundColor(Color(white: 0.6))
             .frame(width: 24, height: 24)
             .background(
