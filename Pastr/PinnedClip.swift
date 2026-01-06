@@ -16,3 +16,15 @@ final class PinnedClip: NSManagedObject {
     @NSManaged var typesArchive: Data?
     @NSManaged var fingerprint: String
 }
+extension PinnedClip {
+    @nonobjc
+    convenience init(context: NSManagedObjectContext) {
+        let entity = NSEntityDescription.entity(forEntityName: "PinnedClip", in: context)!
+        self.init(entity: entity, insertInto: context)
+        self.id = UUID()
+        self.createdAt = Date()
+        self.type = ""
+        self.fingerprint = UUID().uuidString
+    }
+}
+
