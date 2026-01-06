@@ -152,33 +152,152 @@ struct PanelView: View {
 
     @ViewBuilder
     private func contextMenu(for item: ClipboardItem) -> some View {
-        if item.isPinned {
-            Button("Unpin") { onTogglePin(item) }
-            Button("Edit Title…") { promptForTitle(item: item) }
-        } else {
-            Button("Pin") { onTogglePin(item) }
+        // Paste action
+        Button {
+            onSelect(item)
+        } label: {
+            Label("Paste", systemImage: "doc.on.clipboard")
         }
-        Divider()
-        Button("Copy to Clipboard") { onCopy(item) }
+        .keyboardShortcut(.return, modifiers: [])
+
+        // Paste as Plain Text
         if item.plainText != nil {
-            Button("Paste as Plain Text") { onPastePlainText(item) }
+            Button {
+                onPastePlainText(item)
+            } label: {
+                Label("Paste as Plain Text", systemImage: "text.alignleft")
+            }
+            .keyboardShortcut(.return, modifiers: [.shift, .command])
         }
-        if item.type == .link, item.urlString != nil {
-            Button("Open Link") { onOpenLink(item) }
+
+        // Copy
+        Button {
+            onCopy(item)
+        } label: {
+            Label("Copy", systemImage: "doc.on.doc")
         }
-        if item.type == .file, !item.fileURLs.isEmpty {
-            Button("Reveal in Finder") { onRevealInFinder(item) }
-        }
+        .keyboardShortcut("c", modifiers: .command)
+
         Divider()
-        if viewModel.hasMultipleSelection {
-            Button("Delete Selected (\(viewModel.selectedItems.count))") {
+
+        // Edit Title (for pinned items)
+        if item.isPinned {
+            Button {
+                promptForTitle(item: item)
+            } label: {
+                Label("Edit Title", systemImage: "pencil")
+            }
+            .keyboardShortcut("e", modifiers: .command)
+        }
+
+        // Rename (Edit Title for non-pinned)
+        if !item.isPinned {
+            Button {
+                promptForTitle(item: item)
+            } label: {
+                Label("Rename", systemImage: "pencil.line")
+            }
+            .keyboardShortcut("r", modifiers: .command)
+        }
+
+        // Delete
+        Button(role: .destructive) {
+            if viewModel.hasMultipleSelection {
                 onDelete(viewModel.selectedItems)
                 viewModel.clearMultiSelection()
-            }
-        } else {
-            Button("Delete") {
+            } else {
                 onDelete([item])
             }
+        } label: {
+            if viewModel.hasMultipleSelection {
+                Label("Delete Selected (\(viewModel.selectedItems.count))", systemImage: "trash")
+            } else {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .keyboardShortcut(.delete, modifiers: [])
+
+        Divider()
+
+        // Pin submenu
+        Menu {
+            if item.isPinned {
+                Button {
+                    onTogglePin(item)
+                } label: {
+                    Label("Unpin", systemImage: "pin.slash")
+                }
+            } else {
+                Button {
+                    onTogglePin(item)
+                } label: {
+                    Label("Pin to Top", systemImage: "pin")
+                }
+            }
+        } label: {
+            Label("Pin", systemImage: "pin")
+        }
+
+        Divider()
+
+        // Preview
+        Button {
+            showPreview(for: item)
+        } label: {
+            Label("Preview", systemImage: "eye")
+        }
+        .keyboardShortcut(.space, modifiers: [])
+
+        // Open Link (for links)
+        if item.type == .link, item.urlString != nil {
+            Button {
+                onOpenLink(item)
+            } label: {
+                Label("Open Link", systemImage: "safari")
+            }
+        }
+
+        // Reveal in Finder (for files)
+        if item.type == .file, !item.fileURLs.isEmpty {
+            Button {
+                onRevealInFinder(item)
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+        }
+
+        // Share submenu
+        Menu {
+            Button {
+                shareItem(item)
+            } label: {
+                Label("Share...", systemImage: "square.and.arrow.up")
+            }
+        } label: {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+    }
+
+    private func showPreview(for item: ClipboardItem) {
+        // Quick Look preview - for now just copy to clipboard
+        onCopy(item)
+    }
+
+    private func shareItem(_ item: ClipboardItem) {
+        let content: Any
+        if let text = item.textContent {
+            content = text
+        } else if let image = item.image {
+            content = image
+        } else if !item.fileURLs.isEmpty {
+            content = item.fileURLs
+        } else {
+            content = item.previewText
+        }
+
+        let picker = NSSharingServicePicker(items: [content])
+        if let window = NSApp.keyWindow, let contentView = window.contentView {
+            picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
         }
     }
 
