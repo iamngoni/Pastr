@@ -82,13 +82,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handlePaste(item: ClipboardItem) {
         guard let pasteController else { return }
         panelWindowController?.hidePanel()
-        pasteController.paste(item: item, after: 0.08)
+        pasteController.paste(item: item, after: settingsStore.pasteDelay)
     }
 
     private func handlePastePlainText(item: ClipboardItem) {
         guard let pasteController else { return }
         panelWindowController?.hidePanel()
-        pasteController.pastePlainText(item.plainText ?? item.previewText, after: 0.08)
+        pasteController.pastePlainText(item.plainText ?? item.previewText, after: settingsStore.pasteDelay)
     }
 
     private func showOnboarding() {
@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 520),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
