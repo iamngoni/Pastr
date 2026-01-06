@@ -102,7 +102,7 @@ final class LinkPreview: NSObject {
     let title: String?
     let siteName: String
     var icon: NSImage?
-    var image: NSImage?  // The Open Graph preview image
+    var image: NSImage?
 
     init(url: String, title: String?, siteName: String) {
         self.url = url
