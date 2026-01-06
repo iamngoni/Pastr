@@ -27,7 +27,13 @@ final class StatusBarController {
     private func createStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Pastr")
+            // Use custom menu bar icon from assets, fallback to system symbol
+            if let customIcon = NSImage(named: "MenuBarIcon") {
+                customIcon.isTemplate = true
+                button.image = customIcon
+            } else {
+                button.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Pastr")
+            }
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.target = self
