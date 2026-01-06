@@ -5,6 +5,7 @@ final class PanelViewModel: ObservableObject {
     @Published var selectedSection: PanelSection = .history
     @Published var selectedIndex: Int = 0
     @Published var searchText: String = ""
+    @Published var selectedItemIds: Set<UUID> = []
 
     private let historyStore: ClipboardHistoryStore
 
@@ -42,24 +43,66 @@ final class PanelViewModel: ObservableObject {
         return items[selectedIndex]
     }
 
+    var selectedItems: [ClipboardItem] {
+        if selectedItemIds.isEmpty, let item = selectedItem {
+            return [item]
+        }
+        return items.filter { selectedItemIds.contains($0.id) }
+    }
+
+    var hasMultipleSelection: Bool {
+        selectedItemIds.count > 1
+    }
+
+    func isSelected(_ item: ClipboardItem) -> Bool {
+        if selectedItemIds.isEmpty {
+            return items.firstIndex(where: { $0.id == item.id }) == selectedIndex
+        }
+        return selectedItemIds.contains(item.id)
+    }
+
     func resetSelection() {
         selectedIndex = 0
         searchText = ""
+        selectedItemIds.removeAll()
     }
 
     func selectNext() {
         guard !items.isEmpty else { return }
         selectedIndex = min(selectedIndex + 1, items.count - 1)
+        selectedItemIds.removeAll()
     }
 
     func selectPrevious() {
         guard !items.isEmpty else { return }
         selectedIndex = max(selectedIndex - 1, 0)
+        selectedItemIds.removeAll()
     }
 
     func selectItem(_ item: ClipboardItem) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             selectedIndex = index
+            selectedItemIds.removeAll()
         }
+    }
+
+    func toggleSelection(for item: ClipboardItem) {
+        if selectedItemIds.contains(item.id) {
+            selectedItemIds.remove(item.id)
+        } else {
+            // If first multi-select, add current single selection too
+            if selectedItemIds.isEmpty, let current = selectedItem {
+                selectedItemIds.insert(current.id)
+            }
+            selectedItemIds.insert(item.id)
+        }
+    }
+
+    func selectAll() {
+        selectedItemIds = Set(items.map { $0.id })
+    }
+
+    func clearMultiSelection() {
+        selectedItemIds.removeAll()
     }
 }

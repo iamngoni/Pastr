@@ -46,6 +46,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onUpdatePinnedTitle: { [weak self] item, title in
                 self?.historyStore.updatePinnedTitle(for: item, title: title)
             },
+            onDelete: { [weak self] items in
+                self?.historyStore.delete(items)
+            },
             onOpenSettings: { [weak self] in
                 self?.showSettings()
             }

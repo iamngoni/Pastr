@@ -10,6 +10,7 @@ struct PanelView: View {
     let onOpenLink: (ClipboardItem) -> Void
     let onRevealInFinder: (ClipboardItem) -> Void
     let onUpdatePinnedTitle: (ClipboardItem, String) -> Void
+    let onDelete: ([ClipboardItem]) -> Void
     let onOpenSettings: () -> Void
 
     var body: some View {
@@ -109,17 +110,29 @@ struct PanelView: View {
         return ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    ForEach(Array(items.enumerated()), id: \.element.id) { _, item in
                         ClipboardCardView(
                             item: item,
-                            isSelected: index == viewModel.selectedIndex,
+                            isSelected: viewModel.isSelected(item),
                             onTogglePin: { onTogglePin(item) }
                         )
                         .id(item.id)
-                        .onTapGesture {
-                            viewModel.selectItem(item)
-                            onSelect(item)
-                        }
+                        .gesture(
+                            TapGesture()
+                                .modifiers(.command)
+                                .onEnded { _ in
+                                    viewModel.toggleSelection(for: item)
+                                }
+                        )
+                        .simultaneousGesture(
+                            TapGesture()
+                                .onEnded { _ in
+                                    if !NSEvent.modifierFlags.contains(.command) {
+                                        viewModel.selectItem(item)
+                                        onSelect(item)
+                                    }
+                                }
+                        )
                         .contextMenu {
                             contextMenu(for: item)
                         }
@@ -155,6 +168,17 @@ struct PanelView: View {
         }
         if item.type == .file, !item.fileURLs.isEmpty {
             Button("Reveal in Finder") { onRevealInFinder(item) }
+        }
+        Divider()
+        if viewModel.hasMultipleSelection {
+            Button("Delete Selected (\(viewModel.selectedItems.count))") {
+                onDelete(viewModel.selectedItems)
+                viewModel.clearMultiSelection()
+            }
+        } else {
+            Button("Delete") {
+                onDelete([item])
+            }
         }
     }
 
