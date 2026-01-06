@@ -314,6 +314,12 @@ struct OnboardingView: View {
     }
 
     private func finishOnboarding() {
+        // Request accessibility permissions if not already granted
+        if !accessibilityGranted {
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            AXIsProcessTrustedWithOptions(options)
+        }
+
         onFinish()
         NSApp.keyWindow?.close()
     }
