@@ -123,8 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func requestAccessibilityPermissions() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        let trusted = AXIsProcessTrustedWithOptions(options)
+        // Check without prompting - onboarding handles the initial prompt
+        let trusted = AXIsProcessTrustedWithOptions(nil)
         if !trusted {
             print("Accessibility permissions not granted. Paste functionality requires accessibility access.")
         }
