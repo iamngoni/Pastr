@@ -8,7 +8,7 @@ final class ClipboardActions {
 
     func openLink(_ item: ClipboardItem) {
         guard let urlString = item.urlString, let url = URL(string: urlString) else { return }
-        NSWorkspace.shared.open(url)
+        NSWorkspace.shared.open(url)pa
     }
 
     func revealInFinder(_ item: ClipboardItem) {
