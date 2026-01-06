@@ -1,10 +1,12 @@
 import AppKit
 import QuartzCore
+import ScreenCaptureKit
 import SwiftUI
 
 final class PanelWindowController {
     private let panel: PastrPanel
     private let historyStore: ClipboardHistoryStore
+    private let settingsStore = SettingsStore.shared
     private let viewModel: PanelViewModel
     private let onSelect: (ClipboardItem) -> Void
     private let onTogglePin: (ClipboardItem) -> Void
@@ -77,6 +79,11 @@ final class PanelWindowController {
     }
 
     func showPanel() {
+        // Check if we should hide during screen sharing
+        if !settingsStore.showDuringScreenSharing && isScreenBeingShared() {
+            return
+        }
+
         guard let screen = screenForCursor() else { return }
         let targetFrame = panelFrame(for: screen)
         let startFrame = targetFrame.offsetBy(dx: 0, dy: -targetFrame.height - 12)
@@ -94,6 +101,45 @@ final class PanelWindowController {
 
         startClickMonitor()
         startKeyMonitor()
+    }
+
+    private func isScreenBeingShared() -> Bool {
+        // Check for common screen sharing apps
+        let screenSharingApps = [
+            "zoom.us",
+            "com.microsoft.teams",
+            "us.zoom.xos",
+            "com.apple.FaceTime",
+            "com.webex.meetingmanager",
+            "com.google.Chrome", // For Google Meet
+            "com.apple.ScreenSharing"
+        ]
+
+        // Check if any screen sharing apps are running and active
+        for app in NSWorkspace.shared.runningApplications {
+            if let bundleId = app.bundleIdentifier,
+               screenSharingApps.contains(where: { bundleId.contains($0) }) {
+                // Additional heuristic: Check if the app is presenting
+                if app.isActive || app.ownsMenuBar {
+                    // This is a simplified check - true screen sharing detection
+                    // would require more sophisticated APIs
+                    return false // For now, don't block - let user control via setting
+                }
+            }
+        }
+
+        // Check for screen recording indicator (macOS shows an orange dot)
+        // This is a best-effort detection using CGWindowListCopyWindowInfo
+        if let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] {
+            for window in windowList {
+                if let ownerName = window[kCGWindowOwnerName as String] as? String,
+                   ownerName.contains("screencapture") || ownerName.contains("ScreenSharing") {
+                    return true
+                }
+            }
+        }
+
+        return false
     }
 
     func hidePanel() {

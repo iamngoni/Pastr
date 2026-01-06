@@ -57,6 +57,27 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(showInMenuBar, forKey: Keys.showInMenuBar) }
     }
 
+    // Privacy settings
+    @Published var showDuringScreenSharing: Bool {
+        didSet { defaults.set(showDuringScreenSharing, forKey: Keys.showDuringScreenSharing) }
+    }
+
+    @Published var generateLinkPreviews: Bool {
+        didSet { defaults.set(generateLinkPreviews, forKey: Keys.generateLinkPreviews) }
+    }
+
+    @Published var ignoreConfidentialContent: Bool {
+        didSet { defaults.set(ignoreConfidentialContent, forKey: Keys.ignoreConfidentialContent) }
+    }
+
+    @Published var ignoreTransientContent: Bool {
+        didSet { defaults.set(ignoreTransientContent, forKey: Keys.ignoreTransientContent) }
+    }
+
+    @Published var ignoredAppBundleIds: [String] {
+        didSet { defaults.set(ignoredAppBundleIds, forKey: Keys.ignoredAppBundleIds) }
+    }
+
     private let defaults = UserDefaults.standard
 
     private init() {
@@ -91,6 +112,26 @@ final class SettingsStore: ObservableObject {
 
         let storedShowInMenuBar = defaults.object(forKey: Keys.showInMenuBar)
         showInMenuBar = storedShowInMenuBar == nil ? true : defaults.bool(forKey: Keys.showInMenuBar)
+
+        // Privacy settings - defaults
+        let storedShowDuringScreenSharing = defaults.object(forKey: Keys.showDuringScreenSharing)
+        showDuringScreenSharing = storedShowDuringScreenSharing == nil ? true : defaults.bool(forKey: Keys.showDuringScreenSharing)
+
+        let storedGenerateLinkPreviews = defaults.object(forKey: Keys.generateLinkPreviews)
+        generateLinkPreviews = storedGenerateLinkPreviews == nil ? true : defaults.bool(forKey: Keys.generateLinkPreviews)
+
+        let storedIgnoreConfidential = defaults.object(forKey: Keys.ignoreConfidentialContent)
+        ignoreConfidentialContent = storedIgnoreConfidential == nil ? true : defaults.bool(forKey: Keys.ignoreConfidentialContent)
+
+        let storedIgnoreTransient = defaults.object(forKey: Keys.ignoreTransientContent)
+        ignoreTransientContent = storedIgnoreTransient == nil ? true : defaults.bool(forKey: Keys.ignoreTransientContent)
+
+        // Default ignored apps: Keychain Access, Passwords, 1Password, etc.
+        let storedIgnoredApps = defaults.stringArray(forKey: Keys.ignoredAppBundleIds)
+        ignoredAppBundleIds = storedIgnoredApps ?? [
+            "com.apple.keychainaccess",
+            "com.apple.Passwords"
+        ]
     }
 
     private enum Keys {
@@ -106,6 +147,29 @@ final class SettingsStore: ObservableObject {
         static let playSoundEffects = "playSoundEffects"
         static let pasteDelay = "pasteDelay"
         static let showInMenuBar = "showInMenuBar"
+        // Privacy
+        static let showDuringScreenSharing = "showDuringScreenSharing"
+        static let generateLinkPreviews = "generateLinkPreviews"
+        static let ignoreConfidentialContent = "ignoreConfidentialContent"
+        static let ignoreTransientContent = "ignoreTransientContent"
+        static let ignoredAppBundleIds = "ignoredAppBundleIds"
+    }
+
+    // MARK: - Ignored Apps Management
+
+    func addIgnoredApp(_ bundleId: String) {
+        if !ignoredAppBundleIds.contains(bundleId) {
+            ignoredAppBundleIds.append(bundleId)
+        }
+    }
+
+    func removeIgnoredApp(_ bundleId: String) {
+        ignoredAppBundleIds.removeAll { $0 == bundleId }
+    }
+
+    func isAppIgnored(_ bundleId: String?) -> Bool {
+        guard let bundleId = bundleId else { return false }
+        return ignoredAppBundleIds.contains { $0.lowercased() == bundleId.lowercased() }
     }
 }
 

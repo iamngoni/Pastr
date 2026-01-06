@@ -22,6 +22,20 @@ final class LinkPreviewService: ObservableObject {
     }
 
     func fetchPreview(for urlString: String) {
+        // Check if link previews are disabled in settings
+        guard SettingsStore.shared.generateLinkPreviews else {
+            // Just set a basic preview with domain only, no network request
+            let basicPreview = LinkPreview(
+                url: urlString,
+                title: nil,
+                siteName: extractDomain(from: urlString)
+            )
+            DispatchQueue.main.async {
+                self.previews[urlString] = basicPreview
+            }
+            return
+        }
+
         guard !inFlightRequests.contains(urlString),
               previews[urlString] == nil,
               cache.object(forKey: urlString as NSString) == nil,
