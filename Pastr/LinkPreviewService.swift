@@ -117,7 +117,7 @@ final class LinkPreviewService: ObservableObject {
     private func updatePreview(urlString: String, image: NSImage, isIcon: Bool) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            if var preview = self.previews[urlString] {
+            if let preview = self.previews[urlString] {
                 if isIcon {
                     preview.icon = image
                 } else {
