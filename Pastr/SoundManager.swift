@@ -19,10 +19,4 @@ enum SoundManager {
         sound.volume = soundVolume
         sound.play()
     }
-
-    private static func playSound(named name: String) {
-        guard let sound = NSSound(named: name) else { return }
-        sound.volume = soundVolume
-        sound.play()
-    }
 }
