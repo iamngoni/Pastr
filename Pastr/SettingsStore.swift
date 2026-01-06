@@ -83,7 +83,8 @@ final class SettingsStore: ObservableObject {
 
         launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
 
-        playSoundEffects = defaults.bool(forKey: Keys.playSoundEffects)
+        let storedPlaySoundEffects = defaults.object(forKey: Keys.playSoundEffects)
+        playSoundEffects = storedPlaySoundEffects == nil ? true : defaults.bool(forKey: Keys.playSoundEffects)
 
         let storedPasteDelay = defaults.double(forKey: Keys.pasteDelay)
         pasteDelay = storedPasteDelay == 0 ? 0.08 : storedPasteDelay
