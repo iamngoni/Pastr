@@ -4,6 +4,7 @@ import Foundation
 final class PanelViewModel: ObservableObject {
     @Published var selectedSection: PanelSection = .history
     @Published var selectedIndex: Int = 0
+    @Published var searchText: String = ""
 
     private let historyStore: ClipboardHistoryStore
 
@@ -12,7 +13,27 @@ final class PanelViewModel: ObservableObject {
     }
 
     var items: [ClipboardItem] {
-        historyStore.items(for: selectedSection)
+        let baseItems = historyStore.items(for: selectedSection)
+        guard !searchText.isEmpty else { return baseItems }
+        let query = searchText.lowercased()
+        return baseItems.filter { item in
+            if let text = item.textContent?.lowercased(), text.contains(query) {
+                return true
+            }
+            if let url = item.urlString?.lowercased(), url.contains(query) {
+                return true
+            }
+            if let title = item.pinnedTitle?.lowercased(), title.contains(query) {
+                return true
+            }
+            if let appName = item.sourceAppName?.lowercased(), appName.contains(query) {
+                return true
+            }
+            if item.fileURLs.contains(where: { $0.lastPathComponent.lowercased().contains(query) }) {
+                return true
+            }
+            return false
+        }
     }
 
     var selectedItem: ClipboardItem? {
@@ -23,6 +44,7 @@ final class PanelViewModel: ObservableObject {
 
     func resetSelection() {
         selectedIndex = 0
+        searchText = ""
     }
 
     func selectNext() {

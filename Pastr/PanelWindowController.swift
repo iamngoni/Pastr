@@ -13,6 +13,7 @@ final class PanelWindowController {
     private let onOpenLink: (ClipboardItem) -> Void
     private let onRevealInFinder: (ClipboardItem) -> Void
     private let onUpdatePinnedTitle: (ClipboardItem, String) -> Void
+    private let onOpenSettings: () -> Void
     private var clickMonitor: Any?
     private var keyMonitor: Any?
 
@@ -28,7 +29,8 @@ final class PanelWindowController {
         onPastePlainText: @escaping (ClipboardItem) -> Void,
         onOpenLink: @escaping (ClipboardItem) -> Void,
         onRevealInFinder: @escaping (ClipboardItem) -> Void,
-        onUpdatePinnedTitle: @escaping (ClipboardItem, String) -> Void
+        onUpdatePinnedTitle: @escaping (ClipboardItem, String) -> Void,
+        onOpenSettings: @escaping () -> Void
     ) {
         self.historyStore = historyStore
         self.onSelect = onSelect
@@ -38,10 +40,11 @@ final class PanelWindowController {
         self.onOpenLink = onOpenLink
         self.onRevealInFinder = onRevealInFinder
         self.onUpdatePinnedTitle = onUpdatePinnedTitle
+        self.onOpenSettings = onOpenSettings
         self.viewModel = PanelViewModel(historyStore: historyStore)
 
         let panel = PastrPanel(
-            contentRect: .init(x: 0, y: 0, width: 900, height: 230),
+            contentRect: .init(x: 0, y: 0, width: 900, height: 280),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -61,7 +64,8 @@ final class PanelWindowController {
             onPastePlainText: onPastePlainText,
             onOpenLink: onOpenLink,
             onRevealInFinder: onRevealInFinder,
-            onUpdatePinnedTitle: onUpdatePinnedTitle
+            onUpdatePinnedTitle: onUpdatePinnedTitle,
+            onOpenSettings: onOpenSettings
         )
         panel.contentView = NSHostingView(rootView: rootView)
 
@@ -105,7 +109,7 @@ final class PanelWindowController {
 
     private func panelFrame(for screen: NSScreen) -> NSRect {
         let margin: CGFloat = 18
-        let height: CGFloat = 230
+        let height: CGFloat = 280
         let width = screen.visibleFrame.width - margin * 2
         let x = screen.visibleFrame.minX + margin
         let y = screen.visibleFrame.minY + margin

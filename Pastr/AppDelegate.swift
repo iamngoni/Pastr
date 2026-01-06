@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settingsStore = SettingsStore.shared
     private let pinnedStore = PinnedStore.shared
     private var onboardingController: OnboardingWindowController?
+    private var settingsWindow: NSWindow?
     private let clipboardActions = ClipboardActions()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -39,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onUpdatePinnedTitle: { [weak self] item, title in
                 self?.historyStore.updatePinnedTitle(for: item, title: title)
+            },
+            onOpenSettings: { [weak self] in
+                self?.showSettings()
             }
         )
 
@@ -94,5 +98,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onboardingController = controller
         controller.showWindow(nil)
         controller.window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func showSettings() {
+        panelWindowController?.hidePanel()
+
+        if let existingWindow = settingsWindow, existingWindow.isVisible {
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let settingsView = SettingsView(
+            settings: settingsStore,
+            historyStore: historyStore,
+            hotKeyManager: hotKeyManager
+        )
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Pastr Settings"
+        window.contentView = NSHostingView(rootView: settingsView)
+        window.center()
+        window.isReleasedWhenClosed = false
+
+        settingsWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
