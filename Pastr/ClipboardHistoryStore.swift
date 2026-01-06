@@ -35,7 +35,7 @@ final class ClipboardHistoryStore: ObservableObject {
     func items(for section: PanelSection) -> [ClipboardItem] {
         switch section {
         case .history:
-            return items.filter { !$0.isPinned }
+            return items
         case .pinned:
             return items.filter { $0.isPinned }
         }
