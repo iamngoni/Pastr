@@ -5,16 +5,40 @@ import SwiftUI
 final class PanelWindowController {
     private let panel: PastrPanel
     private let historyStore: ClipboardHistoryStore
+    private let viewModel: PanelViewModel
     private let onSelect: (ClipboardItem) -> Void
+    private let onTogglePin: (ClipboardItem) -> Void
+    private let onCopy: (ClipboardItem) -> Void
+    private let onPastePlainText: (ClipboardItem) -> Void
+    private let onOpenLink: (ClipboardItem) -> Void
+    private let onRevealInFinder: (ClipboardItem) -> Void
+    private let onUpdatePinnedTitle: (ClipboardItem, String) -> Void
     private var clickMonitor: Any?
+    private var keyMonitor: Any?
 
     var isPanelVisible: Bool {
         panel.isVisible
     }
 
-    init(historyStore: ClipboardHistoryStore, onSelect: @escaping (ClipboardItem) -> Void) {
+    init(
+        historyStore: ClipboardHistoryStore,
+        onSelect: @escaping (ClipboardItem) -> Void,
+        onTogglePin: @escaping (ClipboardItem) -> Void,
+        onCopy: @escaping (ClipboardItem) -> Void,
+        onPastePlainText: @escaping (ClipboardItem) -> Void,
+        onOpenLink: @escaping (ClipboardItem) -> Void,
+        onRevealInFinder: @escaping (ClipboardItem) -> Void,
+        onUpdatePinnedTitle: @escaping (ClipboardItem, String) -> Void
+    ) {
         self.historyStore = historyStore
         self.onSelect = onSelect
+        self.onTogglePin = onTogglePin
+        self.onCopy = onCopy
+        self.onPastePlainText = onPastePlainText
+        self.onOpenLink = onOpenLink
+        self.onRevealInFinder = onRevealInFinder
+        self.onUpdatePinnedTitle = onUpdatePinnedTitle
+        self.viewModel = PanelViewModel(historyStore: historyStore)
 
         let panel = PastrPanel(
             contentRect: .init(x: 0, y: 0, width: 900, height: 200),
@@ -29,7 +53,16 @@ final class PanelWindowController {
         panel.isOpaque = false
         panel.hasShadow = true
 
-        let rootView = PanelView(historyStore: historyStore, onSelect: onSelect)
+        let rootView = PanelView(
+            viewModel: viewModel,
+            onSelect: onSelect,
+            onTogglePin: onTogglePin,
+            onCopy: onCopy,
+            onPastePlainText: onPastePlainText,
+            onOpenLink: onOpenLink,
+            onRevealInFinder: onRevealInFinder,
+            onUpdatePinnedTitle: onUpdatePinnedTitle
+        )
         panel.contentView = NSHostingView(rootView: rootView)
 
         self.panel = panel
@@ -40,6 +73,7 @@ final class PanelWindowController {
         let targetFrame = panelFrame(for: screen)
         let startFrame = targetFrame.offsetBy(dx: 0, dy: -targetFrame.height - 12)
 
+        viewModel.resetSelection()
         NSApp.activate(ignoringOtherApps: true)
         panel.setFrame(startFrame, display: true)
         panel.makeKeyAndOrderFront(nil)
@@ -51,11 +85,13 @@ final class PanelWindowController {
         }
 
         startClickMonitor()
+        startKeyMonitor()
     }
 
     func hidePanel() {
         guard panel.isVisible else { return }
         stopClickMonitor()
+        stopKeyMonitor()
 
         let endFrame = panel.frame.offsetBy(dx: 0, dy: -panel.frame.height - 12)
         NSAnimationContext.runAnimationGroup({ context in
@@ -92,6 +128,38 @@ final class PanelWindowController {
         if let clickMonitor {
             NSEvent.removeMonitor(clickMonitor)
             self.clickMonitor = nil
+        }
+    }
+
+    private func startKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            switch event.keyCode {
+            case 123:
+                self.viewModel.selectPrevious()
+                return nil
+            case 124:
+                self.viewModel.selectNext()
+                return nil
+            case 36, 76:
+                if let item = self.viewModel.selectedItem {
+                    self.onSelect(item)
+                }
+                return nil
+            case 53:
+                self.hidePanel()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func stopKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
         }
     }
 }
