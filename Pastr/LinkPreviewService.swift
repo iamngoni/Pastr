@@ -9,7 +9,6 @@ final class LinkPreviewService: ObservableObject {
     @Published private(set) var previews: [String: LinkPreview] = [:]
     private var inFlightRequests: Set<String> = []
     private let cache = NSCache<NSString, LinkPreview>()
-    private let queue = DispatchQueue(label: "link-preview", qos: .userInitiated)
 
     private init() {
         cache.countLimit = 200
@@ -32,9 +31,8 @@ final class LinkPreviewService: ObservableObject {
 
         inFlightRequests.insert(urlString)
 
-        // Use LPMetadataProvider for rich previews
         let provider = LPMetadataProvider()
-        provider.startFetchingMetadata(for: url) { [weak self] metadata, error in
+        provider.startFetchingMetadata(for: url) { [weak self] metadata, _ in
             guard let self = self else { return }
 
             DispatchQueue.main.async {
@@ -44,24 +42,26 @@ final class LinkPreviewService: ObservableObject {
                     let preview = LinkPreview(
                         url: urlString,
                         title: metadata.title,
-                        siteName: self.extractDomain(from: urlString),
-                        iconProvider: metadata.iconProvider
+                        siteName: self.extractDomain(from: urlString)
                     )
 
                     self.cache.setObject(preview, forKey: urlString as NSString)
                     self.previews[urlString] = preview
 
-                    // Fetch icon asynchronously
+                    // Load the main preview image (Open Graph image)
+                    if let imageProvider = metadata.imageProvider {
+                        self.loadImage(from: imageProvider, for: urlString, isIcon: false)
+                    }
+
+                    // Also load the icon/favicon
                     if let iconProvider = metadata.iconProvider {
-                        self.loadIcon(from: iconProvider, for: urlString)
+                        self.loadImage(from: iconProvider, for: urlString, isIcon: true)
                     }
                 } else {
-                    // Fallback: create basic preview from URL
                     let preview = LinkPreview(
                         url: urlString,
                         title: nil,
-                        siteName: self.extractDomain(from: urlString),
-                        iconProvider: nil
+                        siteName: self.extractDomain(from: urlString)
                     )
                     self.cache.setObject(preview, forKey: urlString as NSString)
                     self.previews[urlString] = preview
@@ -70,13 +70,17 @@ final class LinkPreviewService: ObservableObject {
         }
     }
 
-    private func loadIcon(from provider: NSItemProvider, for urlString: String) {
+    private func loadImage(from provider: NSItemProvider, for urlString: String, isIcon: Bool) {
         provider.loadObject(ofClass: NSImage.self) { [weak self] image, _ in
             guard let self = self, let nsImage = image as? NSImage else { return }
 
             DispatchQueue.main.async {
                 if var preview = self.previews[urlString] {
-                    preview.icon = nsImage
+                    if isIcon {
+                        preview.icon = nsImage
+                    } else {
+                        preview.image = nsImage
+                    }
                     self.previews[urlString] = preview
                     self.cache.setObject(preview, forKey: urlString as NSString)
                 }
@@ -89,7 +93,6 @@ final class LinkPreviewService: ObservableObject {
               let host = url.host else {
             return urlString
         }
-        // Remove www. prefix if present
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 }
@@ -99,13 +102,12 @@ final class LinkPreview: NSObject {
     let title: String?
     let siteName: String
     var icon: NSImage?
-    let iconProvider: NSItemProvider?
+    var image: NSImage?  // The Open Graph preview image
 
-    init(url: String, title: String?, siteName: String, iconProvider: NSItemProvider?) {
+    init(url: String, title: String?, siteName: String) {
         self.url = url
         self.title = title
         self.siteName = siteName
-        self.iconProvider = iconProvider
         super.init()
     }
 }

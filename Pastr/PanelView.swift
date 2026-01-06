@@ -382,66 +382,67 @@ private struct LinkPreviewCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Favicon and domain row
-            HStack(spacing: 8) {
-                if let icon = preview?.icon {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 32, height: 32)
-                        .cornerRadius(6)
-                        .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
-                } else {
-                    // Placeholder favicon
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(red: 0.3, green: 0.5, blue: 0.9), Color(red: 0.5, green: 0.3, blue: 0.8)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+        VStack(alignment: .leading, spacing: 0) {
+            // Large preview image (Open Graph image)
+            if let image = preview?.image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: 90)
+                    .clipped()
+                    .cornerRadius(8)
+            } else {
+                // Gradient placeholder with link icon
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.15, green: 0.25, blue: 0.45),
+                                Color(red: 0.25, green: 0.15, blue: 0.4)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                        .frame(width: 32, height: 32)
-                        .overlay(
-                            Image(systemName: "link")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                        )
-                }
+                    )
+                    .frame(height: 90)
+                    .overlay(
+                        Image(systemName: "link")
+                            .font(.system(size: 28, weight: .medium))
+                            .foregroundColor(.white.opacity(0.3))
+                    )
+            }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(domain)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .lineLimit(1)
-
-                    if let title = preview?.title, !title.isEmpty {
-                        Text(title)
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.6))
-                            .lineLimit(1)
+            // Bottom section with icon, title, and URL
+            VStack(alignment: .leading, spacing: 4) {
+                // Site info row
+                HStack(spacing: 6) {
+                    if let icon = preview?.icon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 14, height: 14)
+                            .cornerRadius(3)
+                    } else {
+                        Image(systemName: "globe")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.5))
                     }
+
+                    Text(domain)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                        .lineLimit(1)
                 }
 
-                Spacer()
+                // Title
+                if let title = preview?.title, !title.isEmpty {
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                }
             }
-
-            // Title (if available and longer)
-            if let title = preview?.title, !title.isEmpty {
-                Text(title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            // URL
-            Text(urlString)
-                .font(.system(size: 10))
-                .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1))
-                .lineLimit(2)
-                .truncationMode(.middle)
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
