@@ -10,6 +10,7 @@ struct PanelView: View {
     let onOpenLink: (ClipboardItem) -> Void
     let onRevealInFinder: (ClipboardItem) -> Void
     let onUpdatePinnedTitle: (ClipboardItem, String) -> Void
+    let onOpenSettings: () -> Void
 
     var body: some View {
         ZStack {
@@ -31,10 +32,41 @@ struct PanelView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
+            // Search field
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+
+                TextField("Search", text: $viewModel.searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+
+                if !viewModel.searchText.isEmpty {
+                    Button {
+                        viewModel.searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.1))
+            )
+            .frame(width: 180)
+
+            // Section tabs
             ForEach(PanelSection.allCases, id: \.self) { section in
                 Button {
                     viewModel.selectedSection = section
-                    viewModel.resetSelection()
+                    viewModel.selectedIndex = 0
                 } label: {
                     Text(section.title)
                         .font(.system(size: 12, weight: .semibold))
@@ -50,6 +82,21 @@ struct PanelView: View {
             }
 
             Spacer()
+
+            // Settings button
+            Button {
+                onOpenSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(6)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.1))
+                    )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -155,7 +202,7 @@ private struct ClipboardCardView: View {
                             Image(nsImage: image)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 170, height: 100)
+                                .frame(width: 204, height: 120)
                                 .clipped()
                                 .cornerRadius(8)
                         } else {
@@ -195,7 +242,7 @@ private struct ClipboardCardView: View {
                 Spacer(minLength: 0)
             }
             .padding(12)
-            .frame(width: 200, height: 150)
+            .frame(width: 240, height: 180)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(Color.black.opacity(0.35))
