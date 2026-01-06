@@ -53,7 +53,9 @@ final class LinkPreviewService: ObservableObject {
 
                     // Load the main preview image (Open Graph image)
                     if let imageProvider = metadata.imageProvider {
-                        self.loadImage(from: imageProvider, for: urlString, isIcon: false)
+                        self.loadImage(from: imageProvider, for: urlString, isIcon: false) { [weak self] in
+                            self?.fetchOpenGraphImage(from: url, for: urlString)
+                        }
                     } else {
                         self.fetchOpenGraphImage(from: url, for: urlString)
                     }
@@ -75,7 +77,12 @@ final class LinkPreviewService: ObservableObject {
         }
     }
 
-    private func loadImage(from provider: NSItemProvider, for urlString: String, isIcon: Bool) {
+    private func loadImage(
+        from provider: NSItemProvider,
+        for urlString: String,
+        isIcon: Bool,
+        onFailure: (() -> Void)? = nil
+    ) {
         // Try loading as NSImage first
         if provider.canLoadObject(ofClass: NSImage.self) {
             provider.loadObject(ofClass: NSImage.self) { [weak self] image, error in
@@ -84,15 +91,20 @@ final class LinkPreviewService: ObservableObject {
                     return
                 }
                 // If NSImage fails, try data approach
-                self?.loadImageAsData(from: provider, for: urlString, isIcon: isIcon)
+                self?.loadImageAsData(from: provider, for: urlString, isIcon: isIcon, onFailure: onFailure)
             }
         } else {
             // Try loading as raw data
-            loadImageAsData(from: provider, for: urlString, isIcon: isIcon)
+            loadImageAsData(from: provider, for: urlString, isIcon: isIcon, onFailure: onFailure)
         }
     }
 
-    private func loadImageAsData(from provider: NSItemProvider, for urlString: String, isIcon: Bool) {
+    private func loadImageAsData(
+        from provider: NSItemProvider,
+        for urlString: String,
+        isIcon: Bool,
+        onFailure: (() -> Void)? = nil
+    ) {
         // Try common image types
         let imageTypes = [
             UTType.png.identifier,
@@ -106,7 +118,10 @@ final class LinkPreviewService: ObservableObject {
         for typeIdentifier in imageTypes {
             if provider.hasItemConformingToTypeIdentifier(typeIdentifier) {
                 provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] data, error in
-                    guard let data = data, let nsImage = NSImage(data: data) else { return }
+                    guard let data = data, let nsImage = NSImage(data: data) else {
+                        onFailure?()
+                        return
+                    }
                     self?.updatePreview(urlString: urlString, image: nsImage, isIcon: isIcon)
                 }
                 return
@@ -115,7 +130,10 @@ final class LinkPreviewService: ObservableObject {
 
         // Last resort: try loading file representation
         provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { [weak self] url, error in
-            guard let url = url, let nsImage = NSImage(contentsOf: url) else { return }
+            guard let url = url, let nsImage = NSImage(contentsOf: url) else {
+                onFailure?()
+                return
+            }
             self?.updatePreview(urlString: urlString, image: nsImage, isIcon: isIcon)
         }
     }
@@ -209,7 +227,12 @@ final class LinkPreviewService: ObservableObject {
     }
 
     private func fetchImageData(from url: URL, for urlString: String) {
-        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+        var request = URLRequest(url: url)
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+            forHTTPHeaderField: "User-Agent"
+        )
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self, let data = data, let image = NSImage(data: data) else { return }
             self.updatePreview(urlString: urlString, image: image, isIcon: false)
         }.resume()
