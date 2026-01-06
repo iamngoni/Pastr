@@ -1,0 +1,110 @@
+import Carbon
+import SwiftUI
+
+struct HotKeyRecorderView: NSViewRepresentable {
+    @Binding var keyCode: UInt32
+    @Binding var modifiers: UInt32
+    let onChange: () -> Void
+
+    func makeNSView(context: Context) -> HotKeyRecorderField {
+        let field = HotKeyRecorderField()
+        field.onKeyCapture = { newKeyCode, newModifiers in
+            keyCode = newKeyCode
+            modifiers = newModifiers
+            onChange()
+        }
+        field.updateDisplay(keyCode: keyCode, modifiers: modifiers)
+        return field
+    }
+
+    func updateNSView(_ nsView: HotKeyRecorderField, context: Context) {
+        nsView.updateDisplay(keyCode: keyCode, modifiers: modifiers)
+    }
+}
+
+final class HotKeyRecorderField: NSView {
+    var onKeyCapture: ((UInt32, UInt32) -> Void)?
+    private let label = NSTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.separatorColor.cgColor
+
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.alignment = .center
+        label.textColor = .labelColor
+
+        addSubview(label)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        label.frame = bounds.insetBy(dx: 8, dy: 4)
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let keyCode = UInt32(event.keyCode)
+        let modifiers = HotKeyRecorderField.modifierFlags(from: event.modifierFlags)
+        onKeyCapture?(keyCode, modifiers)
+        updateDisplay(keyCode: keyCode, modifiers: modifiers)
+    }
+
+    func updateDisplay(keyCode: UInt32, modifiers: UInt32) {
+        label.stringValue = HotKeyRecorderField.displayString(for: keyCode, modifiers: modifiers)
+    }
+
+    private static func modifierFlags(from flags: NSEvent.ModifierFlags) -> UInt32 {
+        var carbonFlags: UInt32 = 0
+        if flags.contains(.command) { carbonFlags |= UInt32(cmdKey) }
+        if flags.contains(.option) { carbonFlags |= UInt32(optionKey) }
+        if flags.contains(.control) { carbonFlags |= UInt32(controlKey) }
+        if flags.contains(.shift) { carbonFlags |= UInt32(shiftKey) }
+        return carbonFlags
+    }
+
+    private static func displayString(for keyCode: UInt32, modifiers: UInt32) -> String {
+        var parts: [String] = []
+        if modifiers & UInt32(controlKey) != 0 { parts.append("⌃") }
+        if modifiers & UInt32(optionKey) != 0 { parts.append("⌥") }
+        if modifiers & UInt32(shiftKey) != 0 { parts.append("⇧") }
+        if modifiers & UInt32(cmdKey) != 0 { parts.append("⌘") }
+
+        parts.append(keyLabel(for: keyCode))
+        return parts.joined()
+    }
+
+    private static func keyLabel(for keyCode: UInt32) -> String {
+        switch keyCode {
+        case 36: return "⏎"
+        case 49: return "Space"
+        case 51: return "⌫"
+        case 53: return "⎋"
+        default:
+            if let scalar = keyCodeToUnicode[keyCode] {
+                return String(scalar).uppercased()
+            }
+            return "Key \(keyCode)"
+        }
+    }
+
+    private static let keyCodeToUnicode: [UInt32: Character] = [
+        0: "A", 11: "B", 8: "C", 2: "D", 14: "E", 3: "F", 5: "G", 4: "H",
+        34: "I", 38: "J", 40: "K", 37: "L", 46: "M", 45: "N", 31: "O", 35: "P",
+        12: "Q", 15: "R", 1: "S", 17: "T", 32: "U", 9: "V", 13: "W", 7: "X",
+        16: "Y", 6: "Z",
+        18: "1", 19: "2", 20: "3", 21: "4", 23: "5", 22: "6", 26: "7", 28: "8", 25: "9", 29: "0"
+    ]
+}

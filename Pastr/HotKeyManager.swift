@@ -2,12 +2,18 @@ import AppKit
 import Carbon
 
 final class HotKeyManager {
+    static let shared = HotKeyManager()
+
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
-    private let onHotKey: () -> Void
+    private var onHotKey: () -> Void
 
-    init(onHotKey: @escaping () -> Void) {
+    init(onHotKey: @escaping () -> Void = {}) {
         self.onHotKey = onHotKey
+    }
+
+    func updateHandler(_ handler: @escaping () -> Void) {
+        onHotKey = handler
     }
 
     func registerDefaultHotKey() {

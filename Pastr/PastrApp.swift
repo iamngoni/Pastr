@@ -13,7 +13,11 @@ struct PastrApp: App {
 
     var body: some Scene {
         Settings {
-            EmptyView()
+            SettingsView(
+                settings: SettingsStore.shared,
+                historyStore: ClipboardHistoryStore.shared,
+                hotKeyManager: HotKeyManager.shared
+            )
         }
     }
 }

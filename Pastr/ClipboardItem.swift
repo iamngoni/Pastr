@@ -11,8 +11,8 @@ struct ClipboardItem: Identifiable, Hashable {
     let fileURLs: [URL]
     let sourceAppBundleId: String?
     let sourceAppName: String?
-    let isPinned: Bool
-    let pinnedTitle: String?
+    var isPinned: Bool
+    var pinnedTitle: String?
     let typesData: [NSPasteboard.PasteboardType: Data]
     let fingerprint: String
 
@@ -30,6 +30,19 @@ struct ClipboardItem: Identifiable, Hashable {
             return fileURLs.map { $0.lastPathComponent }.joined(separator: ", ")
         }
         return type.label
+    }
+
+    var plainText: String? {
+        if let textContent, !textContent.isEmpty {
+            return textContent
+        }
+        if let urlString, !urlString.isEmpty {
+            return urlString
+        }
+        if !fileURLs.isEmpty {
+            return fileURLs.map { $0.path }.joined(separator: " ")
+        }
+        return nil
     }
 
     var relativeTime: String {
@@ -63,7 +76,11 @@ struct ClipboardItem: Identifiable, Hashable {
             item.setString(urlString, forType: .URL)
         }
 
-        pasteboard.writeObjects([item])
+        var objects: [NSPasteboardWriting] = [item]
+        if !fileURLs.isEmpty {
+            objects.append(contentsOf: fileURLs)
+        }
+        pasteboard.writeObjects(objects)
     }
 }
 

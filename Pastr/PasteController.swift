@@ -22,6 +22,16 @@ final class PasteController {
         }
     }
 
+    func pastePlainText(_ text: String, after delay: TimeInterval) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        if let targetApp = previousApp {
+            targetApp.activate(options: [.activateIgnoringOtherApps])
+        }
+        triggerPasteShortcut(after: delay)
+    }
+
     private func triggerPasteShortcut(after delay: TimeInterval) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             let source = CGEventSource(stateID: .combinedSessionState)
