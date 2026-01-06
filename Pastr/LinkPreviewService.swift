@@ -9,6 +9,7 @@ final class LinkPreviewService: ObservableObject {
 
     @Published private(set) var previews: [String: LinkPreview] = [:]
     private var inFlightRequests: Set<String> = []
+    private var providers: [String: LPMetadataProvider] = [:]
     private let cache = NSCache<NSString, LinkPreview>()
 
     private init() {
@@ -26,18 +27,20 @@ final class LinkPreviewService: ObservableObject {
         guard !inFlightRequests.contains(urlString),
               previews[urlString] == nil,
               cache.object(forKey: urlString as NSString) == nil,
-              let url = URL(string: urlString) else {
+              let url = normalizedURL(from: urlString) else {
             return
         }
 
         inFlightRequests.insert(urlString)
 
         let provider = LPMetadataProvider()
+        providers[urlString] = provider
         provider.startFetchingMetadata(for: url) { [weak self] metadata, error in
             guard let self = self else { return }
 
             DispatchQueue.main.async {
                 self.inFlightRequests.remove(urlString)
+                self.providers[urlString] = nil
 
                 if let metadata = metadata {
                     let preview = LinkPreview(
@@ -130,11 +133,22 @@ final class LinkPreviewService: ObservableObject {
     }
 
     private func extractDomain(from urlString: String) -> String {
-        guard let url = URL(string: urlString),
-              let host = url.host else {
-            return urlString
+        if let url = URL(string: urlString),
+           let host = url.host {
+            return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
         }
-        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        if let url = URL(string: "https://\(urlString)"),
+           let host = url.host {
+            return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        }
+        return urlString
+    }
+
+    private func normalizedURL(from urlString: String) -> URL? {
+        if let url = URL(string: urlString), url.scheme != nil {
+            return url
+        }
+        return URL(string: "https://\(urlString)")
     }
 }
 
