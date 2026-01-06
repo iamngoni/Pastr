@@ -129,9 +129,7 @@ struct SettingsView: View {
                             ) {
                                 hotKeyManager.register(keyCode: settings.hotKeyKeyCode, modifiers: settings.hotKeyModifiers)
                             }
-                            .frame(width: 80, height: 36)
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(10)
+                            .frame(width: 100, height: 36)
                         }
                     }
                     .padding(21)
