@@ -54,6 +54,8 @@ final class LinkPreviewService: ObservableObject {
                     // Load the main preview image (Open Graph image)
                     if let imageProvider = metadata.imageProvider {
                         self.loadImage(from: imageProvider, for: urlString, isIcon: false)
+                    } else {
+                        self.fetchOpenGraphImage(from: url, for: urlString)
                     }
 
                     // Also load the icon/favicon
@@ -67,6 +69,7 @@ final class LinkPreviewService: ObservableObject {
                         siteName: self.extractDomain(from: urlString)
                     )
                     self.previews[urlString] = preview
+                    self.fetchOpenGraphImage(from: url, for: urlString)
                 }
             }
         }
@@ -149,6 +152,67 @@ final class LinkPreviewService: ObservableObject {
             return url
         }
         return URL(string: "https://\(urlString)")
+    }
+
+    private func fetchOpenGraphImage(from url: URL, for urlString: String) {
+        var request = URLRequest(url: url)
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+            forHTTPHeaderField: "User-Agent"
+        )
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self, let data = data else { return }
+            guard let html = String(data: data, encoding: .utf8) else { return }
+
+            if let imageURL = self.extractOpenGraphImageURL(from: html, baseURL: url) {
+                self.fetchImageData(from: imageURL, for: urlString)
+            }
+        }.resume()
+    }
+
+    private func extractOpenGraphImageURL(from html: String, baseURL: URL) -> URL? {
+        let candidates = [
+            extractMetaContent(from: html, property: "og:image"),
+            extractMetaContent(from: html, property: "twitter:image")
+        ]
+
+        for candidate in candidates {
+            guard let value = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty else { continue }
+            if let url = URL(string: value) {
+                return url
+            }
+            if let url = URL(string: value, relativeTo: baseURL) {
+                return url.absoluteURL
+            }
+        }
+        return nil
+    }
+
+    private func extractMetaContent(from html: String, property: String) -> String? {
+        let patterns = [
+            "<meta[^>]+property=[\"']\(property)[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>",
+            "<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']\(property)[\"'][^>]*>",
+            "<meta[^>]+name=[\"']\(property)[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>",
+            "<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+name=[\"']\(property)[\"'][^>]*>"
+        ]
+
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+               let match = regex.firstMatch(in: html, options: [], range: NSRange(html.startIndex..., in: html)),
+               let range = Range(match.range(at: 1), in: html) {
+                return String(html[range])
+            }
+        }
+        return nil
+    }
+
+    private func fetchImageData(from url: URL, for urlString: String) {
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let self = self, let data = data, let image = NSImage(data: data) else { return }
+            self.updatePreview(urlString: urlString, image: image, isIcon: false)
+        }.resume()
     }
 }
 
