@@ -67,7 +67,24 @@ final class ClipboardMonitor {
 
         let textContent = item.string(forType: .string)
         let rtfData = item.data(forType: .rtf)
-        let imageData = item.data(forType: .tiff) ?? item.data(forType: .png)
+
+        // Try multiple image formats - apps use different ones
+        var imageData: Data?
+        if let tiffData = item.data(forType: .tiff) {
+            imageData = tiffData
+        } else if let pngData = item.data(forType: .png) {
+            imageData = pngData
+        } else if let pdfData = item.data(forType: .pdf) {
+            // Some apps copy images as PDF
+            imageData = pdfData
+        } else if pasteboard.canReadObject(forClasses: [NSImage.self], options: nil),
+                  let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+                  let image = images.first,
+                  let tiffRep = image.tiffRepresentation {
+            // Fallback: read as NSImage and convert to TIFF
+            imageData = tiffRep
+        }
+
         let urlString = item.string(forType: .URL)
 
         let fileURLs = (pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
