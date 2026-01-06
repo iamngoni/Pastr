@@ -19,6 +19,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        // Request accessibility permissions (needed for pasting via CGEvent)
+        requestAccessibilityPermissions()
+
         pasteController = PasteController()
         panelWindowController = PanelWindowController(
             historyStore: historyStore,
@@ -117,6 +120,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onboardingController = controller
         controller.showWindow(nil)
         controller.window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func requestAccessibilityPermissions() {
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        if !trusted {
+            print("Accessibility permissions not granted. Paste functionality requires accessibility access.")
+        }
     }
 
     private func showSettings() {
