@@ -1,6 +1,7 @@
 import Carbon
 import Combine
 import Foundation
+import ServiceManagement
 
 final class SettingsStore: ObservableObject {
     static let shared = SettingsStore()
@@ -33,6 +34,29 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) }
     }
 
+    @Published var iCloudSyncEnabled: Bool {
+        didSet { defaults.set(iCloudSyncEnabled, forKey: Keys.iCloudSyncEnabled) }
+    }
+
+    @Published var launchAtLogin: Bool {
+        didSet {
+            defaults.set(launchAtLogin, forKey: Keys.launchAtLogin)
+            LaunchAtLogin.setEnabled(launchAtLogin)
+        }
+    }
+
+    @Published var playSoundEffects: Bool {
+        didSet { defaults.set(playSoundEffects, forKey: Keys.playSoundEffects) }
+    }
+
+    @Published var pasteDelay: Double {
+        didSet { defaults.set(pasteDelay, forKey: Keys.pasteDelay) }
+    }
+
+    @Published var showInMenuBar: Bool {
+        didSet { defaults.set(showInMenuBar, forKey: Keys.showInMenuBar) }
+    }
+
     private let defaults = UserDefaults.standard
 
     private init() {
@@ -54,6 +78,18 @@ final class SettingsStore: ObservableObject {
         hotKeyModifiers = storedModifiers == 0 ? UInt32(cmdKey) : UInt32(storedModifiers)
 
         hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)
+
+        iCloudSyncEnabled = defaults.bool(forKey: Keys.iCloudSyncEnabled)
+
+        launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
+
+        playSoundEffects = defaults.bool(forKey: Keys.playSoundEffects)
+
+        let storedPasteDelay = defaults.double(forKey: Keys.pasteDelay)
+        pasteDelay = storedPasteDelay == 0 ? 0.08 : storedPasteDelay
+
+        let storedShowInMenuBar = defaults.object(forKey: Keys.showInMenuBar)
+        showInMenuBar = storedShowInMenuBar == nil ? true : defaults.bool(forKey: Keys.showInMenuBar)
     }
 
     private enum Keys {
@@ -64,5 +100,30 @@ final class SettingsStore: ObservableObject {
         static let hotKeyKeyCode = "hotKeyKeyCode"
         static let hotKeyModifiers = "hotKeyModifiers"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let iCloudSyncEnabled = "iCloudSyncEnabled"
+        static let launchAtLogin = "launchAtLogin"
+        static let playSoundEffects = "playSoundEffects"
+        static let pasteDelay = "pasteDelay"
+        static let showInMenuBar = "showInMenuBar"
+    }
+}
+
+enum LaunchAtLogin {
+    static func setEnabled(_ enabled: Bool) {
+        if #available(macOS 13.0, *) {
+            let service = SMAppService.mainApp
+            do {
+                if enabled {
+                    try service.register()
+                } else {
+                    try service.unregister()
+                }
+            } catch {
+                print("Failed to \(enabled ? "enable" : "disable") launch at login: \(error)")
+            }
+        } else {
+            let identifier = "com.iamngoni.Pastr.LaunchHelper" as CFString
+            SMLoginItemSetEnabled(identifier, enabled)
+        }
     }
 }

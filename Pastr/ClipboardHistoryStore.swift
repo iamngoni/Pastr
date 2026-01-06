@@ -72,6 +72,11 @@ final class ClipboardHistoryStore: ObservableObject {
         persistence.save(items)
     }
 
+    func clearUnpinnedItems() {
+        items.removeAll { !$0.isPinned }
+        persistence.save(items)
+    }
+
     func mergePinned(_ pinnedItems: [ClipboardItem]) {
         for pinned in pinnedItems {
             if let index = items.firstIndex(where: { $0.fingerprint == pinned.fingerprint }) {

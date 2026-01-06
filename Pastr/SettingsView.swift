@@ -60,9 +60,52 @@ struct SettingsView: View {
                 }
             }
 
+            GroupBox(label: Text("General")) {
+                Toggle("Launch at login", isOn: $settings.launchAtLogin)
+
+                Toggle("Show in menu bar", isOn: $settings.showInMenuBar)
+
+                Toggle("Play sound effects", isOn: $settings.playSoundEffects)
+
+                HStack {
+                    Text("Paste delay")
+                        .frame(width: 120, alignment: .leading)
+                    Slider(value: $settings.pasteDelay, in: 0.01...0.5, step: 0.01)
+                        .frame(width: 120)
+                    Text(String(format: "%.2fs", settings.pasteDelay))
+                        .foregroundColor(.secondary)
+                        .frame(width: 50)
+                }
+            }
+
+            GroupBox(label: Text("Sync")) {
+                Toggle("Enable iCloud sync", isOn: $settings.iCloudSyncEnabled)
+                if settings.iCloudSyncEnabled {
+                    Text("Clipboard history will sync across your devices.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            GroupBox(label: Text("Data")) {
+                Button("Clear History") {
+                    showClearHistoryAlert = true
+                }
+                .alert("Clear History", isPresented: $showClearHistoryAlert) {
+                    Button("Cancel", role: .cancel) { }
+                    Button("Clear", role: .destructive) {
+                        historyStore.clearUnpinnedItems()
+                    }
+                } message: {
+                    Text("This will remove all non-pinned clipboard items. This action cannot be undone.")
+                }
+            }
+
             Spacer()
         }
         .padding(24)
-        .frame(width: 420)
+        .frame(width: 420, height: 520)
     }
+
+    @State private var showClearHistoryAlert = false
 }
