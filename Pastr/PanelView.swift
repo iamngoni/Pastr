@@ -229,10 +229,16 @@ private struct ClipboardCardView: View {
                                 .lineLimit(4)
                         }
                     case .text, .other:
-                        Text(item.previewText)
-                            .font(.system(size: 12))
-                            .foregroundColor(.white)
-                            .lineLimit(4)
+                        if SyntaxHighlighter.isLikelyCode(item.previewText) {
+                            Text(SyntaxHighlighter.highlightedAttributedString(item.previewText))
+                                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                .lineLimit(5)
+                        } else {
+                            Text(item.previewText)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .lineLimit(4)
+                        }
                     case .link:
                         Text(item.previewText)
                             .font(.system(size: 12))

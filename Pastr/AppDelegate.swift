@@ -48,9 +48,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
-        statusBarController = StatusBarController { [weak self] in
-            self?.togglePanel()
-        }
+        statusBarController = StatusBarController(
+            onToggle: { [weak self] in
+                self?.togglePanel()
+            },
+            onOpenSettings: { [weak self] in
+                self?.showSettings()
+            }
+        )
 
         hotKeyManager.updateHandler { [weak self] in
             self?.togglePanel()
