@@ -155,14 +155,26 @@ private struct ClipboardCardView: View {
                             Image(nsImage: image)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 150, height: 90)
+                                .frame(width: 170, height: 100)
                                 .clipped()
                                 .cornerRadius(8)
                         } else {
                             Text("Image")
                                 .foregroundColor(.white.opacity(0.7))
                         }
-                    case .text, .richText, .other:
+                    case .richText:
+                        if let attributed = item.attributedPreview {
+                            Text(attributed)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .lineLimit(4)
+                        } else {
+                            Text(item.previewText)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .lineLimit(4)
+                        }
+                    case .text, .other:
                         Text(item.previewText)
                             .font(.system(size: 12))
                             .foregroundColor(.white)
@@ -183,7 +195,7 @@ private struct ClipboardCardView: View {
                 Spacer(minLength: 0)
             }
             .padding(12)
-            .frame(width: 180, height: 140)
+            .frame(width: 200, height: 150)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(Color.black.opacity(0.35))
