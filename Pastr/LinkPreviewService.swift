@@ -1,15 +1,13 @@
 import AppKit
 import Combine
 import Foundation
-import LinkPresentation
-import UniformTypeIdentifiers
+import OpenGraph
 
 final class LinkPreviewService: ObservableObject {
     static let shared = LinkPreviewService()
 
     @Published private(set) var previews: [String: LinkPreview] = [:]
     private var inFlightRequests: Set<String> = []
-    private var providers: [String: LPMetadataProvider] = [:]
     private let cache = NSCache<NSString, LinkPreview>()
 
     private init() {
@@ -33,109 +31,95 @@ final class LinkPreviewService: ObservableObject {
 
         inFlightRequests.insert(urlString)
 
-        let provider = LPMetadataProvider()
-        providers[urlString] = provider
-        provider.startFetchingMetadata(for: url) { [weak self] metadata, error in
+        // Create initial preview immediately with domain
+        let initialPreview = LinkPreview(
+            url: urlString,
+            title: nil,
+            siteName: extractDomain(from: urlString)
+        )
+        DispatchQueue.main.async {
+            self.previews[urlString] = initialPreview
+        }
+
+        // Use OpenGraph library to fetch metadata
+        Task {
+            do {
+                let og = try await OpenGraph.fetch(url: url)
+                await MainActor.run {
+                    self.inFlightRequests.remove(urlString)
+
+                    let preview = LinkPreview(
+                        url: urlString,
+                        title: og[.title],
+                        siteName: og[.siteName] ?? self.extractDomain(from: urlString)
+                    )
+                    self.previews[urlString] = preview
+
+                    // Fetch the OG image
+                    if let imageURLString = og[.image], let imageURL = URL(string: imageURLString) {
+                        self.fetchImage(from: imageURL, for: urlString, isIcon: false)
+                    }
+
+                    // Try to fetch favicon
+                    self.fetchFavicon(for: url, urlString: urlString)
+                }
+            } catch {
+                await MainActor.run {
+                    self.inFlightRequests.remove(urlString)
+                    // Keep the initial preview with just the domain
+                    self.fetchFavicon(for: url, urlString: urlString)
+                }
+            }
+        }
+    }
+
+    private func fetchImage(from imageURL: URL, for urlString: String, isIcon: Bool) {
+        var request = URLRequest(url: imageURL)
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+            forHTTPHeaderField: "User-Agent"
+        )
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self, let data = data, let image = NSImage(data: data) else { return }
+            self.updatePreview(urlString: urlString, image: image, isIcon: isIcon)
+        }.resume()
+    }
+
+    private func fetchFavicon(for url: URL, urlString: String) {
+        // Try common favicon locations
+        guard let host = url.host,
+              let scheme = url.scheme else { return }
+
+        let faviconURLs = [
+            URL(string: "\(scheme)://\(host)/favicon.ico"),
+            URL(string: "\(scheme)://\(host)/apple-touch-icon.png"),
+            URL(string: "\(scheme)://\(host)/apple-touch-icon-precomposed.png"),
+            URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=64")
+        ].compactMap { $0 }
+
+        tryFetchingFavicon(from: faviconURLs, for: urlString, index: 0)
+    }
+
+    private func tryFetchingFavicon(from urls: [URL], for urlString: String, index: Int) {
+        guard index < urls.count else { return }
+
+        var request = URLRequest(url: urls[index])
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+            forHTTPHeaderField: "User-Agent"
+        )
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else { return }
 
-            DispatchQueue.main.async {
-                self.inFlightRequests.remove(urlString)
-                self.providers[urlString] = nil
-
-                if let metadata = metadata {
-                    let preview = LinkPreview(
-                        url: urlString,
-                        title: metadata.title,
-                        siteName: self.extractDomain(from: urlString)
-                    )
-
-                    self.previews[urlString] = preview
-
-                    // Load the main preview image (Open Graph image)
-                    if let imageProvider = metadata.imageProvider {
-                        self.loadImage(from: imageProvider, for: urlString, isIcon: false) { [weak self] in
-                            self?.fetchOpenGraphImage(from: url, for: urlString)
-                        }
-                    } else {
-                        self.fetchOpenGraphImage(from: url, for: urlString)
-                    }
-
-                    // Also load the icon/favicon
-                    if let iconProvider = metadata.iconProvider {
-                        self.loadImage(from: iconProvider, for: urlString, isIcon: true)
-                    }
-                } else {
-                    let preview = LinkPreview(
-                        url: urlString,
-                        title: nil,
-                        siteName: self.extractDomain(from: urlString)
-                    )
-                    self.previews[urlString] = preview
-                    self.fetchOpenGraphImage(from: url, for: urlString)
-                }
+            if let data = data, let image = NSImage(data: data), image.size.width > 0 {
+                self.updatePreview(urlString: urlString, image: image, isIcon: true)
+            } else {
+                // Try next favicon URL
+                self.tryFetchingFavicon(from: urls, for: urlString, index: index + 1)
             }
-        }
-    }
-
-    private func loadImage(
-        from provider: NSItemProvider,
-        for urlString: String,
-        isIcon: Bool,
-        onFailure: (() -> Void)? = nil
-    ) {
-        // Try loading as NSImage first
-        if provider.canLoadObject(ofClass: NSImage.self) {
-            provider.loadObject(ofClass: NSImage.self) { [weak self] image, error in
-                if let nsImage = image as? NSImage {
-                    self?.updatePreview(urlString: urlString, image: nsImage, isIcon: isIcon)
-                    return
-                }
-                // If NSImage fails, try data approach
-                self?.loadImageAsData(from: provider, for: urlString, isIcon: isIcon, onFailure: onFailure)
-            }
-        } else {
-            // Try loading as raw data
-            loadImageAsData(from: provider, for: urlString, isIcon: isIcon, onFailure: onFailure)
-        }
-    }
-
-    private func loadImageAsData(
-        from provider: NSItemProvider,
-        for urlString: String,
-        isIcon: Bool,
-        onFailure: (() -> Void)? = nil
-    ) {
-        // Try common image types
-        let imageTypes = [
-            UTType.png.identifier,
-            UTType.jpeg.identifier,
-            UTType.gif.identifier,
-            UTType.webP.identifier,
-            UTType.image.identifier,
-            "public.image"
-        ]
-
-        for typeIdentifier in imageTypes {
-            if provider.hasItemConformingToTypeIdentifier(typeIdentifier) {
-                provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] data, error in
-                    guard let data = data, let nsImage = NSImage(data: data) else {
-                        onFailure?()
-                        return
-                    }
-                    self?.updatePreview(urlString: urlString, image: nsImage, isIcon: isIcon)
-                }
-                return
-            }
-        }
-
-        // Last resort: try loading file representation
-        provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { [weak self] url, error in
-            guard let url = url, let nsImage = NSImage(contentsOf: url) else {
-                onFailure?()
-                return
-            }
-            self?.updatePreview(urlString: urlString, image: nsImage, isIcon: isIcon)
-        }
+        }.resume()
     }
 
     private func updatePreview(urlString: String, image: NSImage, isIcon: Bool) {
@@ -170,72 +154,6 @@ final class LinkPreviewService: ObservableObject {
             return url
         }
         return URL(string: "https://\(urlString)")
-    }
-
-    private func fetchOpenGraphImage(from url: URL, for urlString: String) {
-        var request = URLRequest(url: url)
-        request.setValue(
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-            forHTTPHeaderField: "User-Agent"
-        )
-
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self = self, let data = data else { return }
-            guard let html = String(data: data, encoding: .utf8) else { return }
-
-            if let imageURL = self.extractOpenGraphImageURL(from: html, baseURL: url) {
-                self.fetchImageData(from: imageURL, for: urlString)
-            }
-        }.resume()
-    }
-
-    private func extractOpenGraphImageURL(from html: String, baseURL: URL) -> URL? {
-        let candidates = [
-            extractMetaContent(from: html, property: "og:image"),
-            extractMetaContent(from: html, property: "twitter:image")
-        ]
-
-        for candidate in candidates {
-            guard let value = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !value.isEmpty else { continue }
-            if let url = URL(string: value) {
-                return url
-            }
-            if let url = URL(string: value, relativeTo: baseURL) {
-                return url.absoluteURL
-            }
-        }
-        return nil
-    }
-
-    private func extractMetaContent(from html: String, property: String) -> String? {
-        let patterns = [
-            "<meta[^>]+property=[\"']\(property)[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>",
-            "<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']\(property)[\"'][^>]*>",
-            "<meta[^>]+name=[\"']\(property)[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>",
-            "<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+name=[\"']\(property)[\"'][^>]*>"
-        ]
-
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-               let match = regex.firstMatch(in: html, options: [], range: NSRange(html.startIndex..., in: html)),
-               let range = Range(match.range(at: 1), in: html) {
-                return String(html[range])
-            }
-        }
-        return nil
-    }
-
-    private func fetchImageData(from url: URL, for urlString: String) {
-        var request = URLRequest(url: url)
-        request.setValue(
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-            forHTTPHeaderField: "User-Agent"
-        )
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self = self, let data = data, let image = NSImage(data: data) else { return }
-            self.updatePreview(urlString: urlString, image: image, isIcon: false)
-        }.resume()
     }
 }
 

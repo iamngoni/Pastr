@@ -112,6 +112,7 @@
 			);
 			name = Pastr;
 			packageProductDependencies = (
+				E8A1B2C3D4E5F6A7B8C9D0E2 /* OpenGraph */,
 			);
 			productName = Pastr;
 			productReference = D6CF593B2F0CFBC700DDB118 /* Pastr.app */;
@@ -195,6 +196,9 @@
 			);
 			mainGroup = D6CF59322F0CFBC700DDB118;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E8A1B2C3D4E5F6A7B8C9D0E1 /* XCRemoteSwiftPackageReference "OpenGraph" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D6CF593C2F0CFBC700DDB118 /* Products */;
 			projectDirPath = "";
@@ -575,6 +579,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E8A1B2C3D4E5F6A7B8C9D0E1 /* XCRemoteSwiftPackageReference "OpenGraph" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/satoshi-takano/OpenGraph.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E8A1B2C3D4E5F6A7B8C9D0E2 /* OpenGraph */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E8A1B2C3D4E5F6A7B8C9D0E1 /* XCRemoteSwiftPackageReference "OpenGraph" */;
+			productName = OpenGraph;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D6CF59332F0CFBC700DDB118 /* Project object */;
 }
