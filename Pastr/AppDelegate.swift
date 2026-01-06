@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -13,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingController: OnboardingWindowController?
     private var settingsWindow: NSWindow?
     private let clipboardActions = ClipboardActions()
+    private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -60,9 +62,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         historyStore.mergePinned(pinnedStore.fetchPinned())
 
+        bindSettings()
+
         if !settingsStore.hasCompletedOnboarding {
             showOnboarding()
         }
+    }
+
+    private func bindSettings() {
+        settingsStore.$showInMenuBar
+            .sink { [weak self] visible in
+                self?.statusBarController?.setVisible(visible)
+            }
+            .store(in: &cancellables)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -82,12 +94,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handlePaste(item: ClipboardItem) {
         guard let pasteController else { return }
         panelWindowController?.hidePanel()
+        SoundManager.playPasteSound()
         pasteController.paste(item: item, after: settingsStore.pasteDelay)
     }
 
     private func handlePastePlainText(item: ClipboardItem) {
         guard let pasteController else { return }
         panelWindowController?.hidePanel()
+        SoundManager.playPasteSound()
         pasteController.pastePlainText(item.plainText ?? item.previewText, after: settingsStore.pasteDelay)
     }
 

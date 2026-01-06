@@ -3,6 +3,7 @@ import AppKit
 final class ClipboardActions {
     func copyToClipboard(_ item: ClipboardItem) {
         item.write(to: .general)
+        SoundManager.playCopySound()
     }
 
     func openLink(_ item: ClipboardItem) {

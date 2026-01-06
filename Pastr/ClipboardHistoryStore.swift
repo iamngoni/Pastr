@@ -48,6 +48,7 @@ final class ClipboardHistoryStore: ObservableObject {
             updated.isPinned = false
             items[index] = updated
             pinnedStore.removePinned(fingerprint: updated.fingerprint)
+            SoundManager.playPinSound()
         } else {
             let currentPinned = items.filter { $0.isPinned }.count
             if currentPinned >= settings.pinLimit {
@@ -57,6 +58,7 @@ final class ClipboardHistoryStore: ObservableObject {
             updated.isPinned = true
             items[index] = updated
             pinnedStore.savePinned(updated)
+            SoundManager.playPinSound()
         }
         persistence.save(items)
     }
