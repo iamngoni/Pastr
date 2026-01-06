@@ -214,7 +214,7 @@ struct SettingsView: View {
         .frame(width: 480, height: 640)
         .alert("Clear History", isPresented: $showClearHistoryAlert) {
             Button("Cancel", role: .cancel) {}
-            Button("Clear", role: .destructive) {
+            Button("Erase", role: .destructive) {
                 historyStore.clearUnpinnedItems()
             }
         } message: {
@@ -328,9 +328,6 @@ struct IgnoredAppRow: View {
             }
             .buttonStyle(.plain)
             .opacity(0.6)
-            .onHover { hovering in
-                // Could add hover effect here
-            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
