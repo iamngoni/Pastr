@@ -38,10 +38,13 @@ struct PanelView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
 
-                TextField("Search", text: $viewModel.searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white)
+                NonCapturingTextField(
+                    text: $viewModel.searchText,
+                    placeholder: "Search",
+                    onArrowLeft: { viewModel.selectPrevious() },
+                    onArrowRight: { viewModel.selectNext() }
+                )
+                .frame(height: 18)
 
                 if !viewModel.searchText.isEmpty {
                     Button {
@@ -103,24 +106,34 @@ struct PanelView: View {
     private var cards: some View {
         let items = viewModel.items
 
-        return ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 12) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    ClipboardCardView(
-                        item: item,
-                        isSelected: index == viewModel.selectedIndex,
-                        onTogglePin: { onTogglePin(item) }
-                    )
-                    .onTapGesture {
-                        viewModel.selectItem(item)
-                        onSelect(item)
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        ClipboardCardView(
+                            item: item,
+                            isSelected: index == viewModel.selectedIndex,
+                            onTogglePin: { onTogglePin(item) }
+                        )
+                        .id(item.id)
+                        .onTapGesture {
+                            viewModel.selectItem(item)
+                            onSelect(item)
+                        }
+                        .contextMenu {
+                            contextMenu(for: item)
+                        }
                     }
-                    .contextMenu {
-                        contextMenu(for: item)
+                }
+                .padding(.vertical, 4)
+            }
+            .onChange(of: viewModel.selectedIndex) { _ in
+                if let selectedItem = viewModel.selectedItem {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo(selectedItem.id, anchor: .center)
                     }
                 }
             }
-            .padding(.vertical, 4)
         }
     }
 
@@ -286,6 +299,69 @@ enum PanelSection: CaseIterable {
         switch self {
         case .history: return "History"
         case .pinned: return "Pinned"
+        }
+    }
+}
+
+// MARK: - Non-Capturing TextField
+
+struct NonCapturingTextField: NSViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    let onArrowLeft: () -> Void
+    let onArrowRight: () -> Void
+
+    func makeNSView(context: Context) -> ArrowPassingTextField {
+        let field = ArrowPassingTextField()
+        field.delegate = context.coordinator
+        field.placeholderString = placeholder
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .systemFont(ofSize: 12)
+        field.textColor = .white
+        field.onArrowLeft = onArrowLeft
+        field.onArrowRight = onArrowRight
+        return field
+    }
+
+    func updateNSView(_ nsView: ArrowPassingTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        let parent: NonCapturingTextField
+
+        init(_ parent: NonCapturingTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            if let field = obj.object as? NSTextField {
+                parent.text = field.stringValue
+            }
+        }
+    }
+}
+
+final class ArrowPassingTextField: NSTextField {
+    var onArrowLeft: (() -> Void)?
+    var onArrowRight: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 123: // Left arrow
+            onArrowLeft?()
+        case 124: // Right arrow
+            onArrowRight?()
+        default:
+            super.keyDown(with: event)
         }
     }
 }
