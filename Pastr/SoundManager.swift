@@ -1,19 +1,18 @@
 import AppKit
-import AudioToolbox
 
 enum SoundManager {
     static func playPasteSound() {
         guard SettingsStore.shared.playSoundEffects else { return }
-        AudioServicesPlaySystemSound(1104) // Paste sound
+        NSSound(named: "Pop")?.play()
     }
 
     static func playCopySound() {
         guard SettingsStore.shared.playSoundEffects else { return }
-        AudioServicesPlaySystemSound(1103) // Copy sound
+        NSSound(named: "Blow")?.play()
     }
 
     static func playPinSound() {
         guard SettingsStore.shared.playSoundEffects else { return }
-        AudioServicesPlaySystemSound(1057) // Pin/click sound
+        NSSound(named: "Tink")?.play()
     }
 }
