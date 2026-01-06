@@ -102,14 +102,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handlePaste(item: ClipboardItem) {
         guard let pasteController else { return }
         panelWindowController?.hidePanel()
-        SoundManager.playPasteSound()
         pasteController.paste(item: item, after: settingsStore.pasteDelay)
     }
 
     private func handlePastePlainText(item: ClipboardItem) {
         guard let pasteController else { return }
         panelWindowController?.hidePanel()
-        SoundManager.playPasteSound()
         pasteController.pastePlainText(item.plainText ?? item.previewText, after: settingsStore.pasteDelay)
     }
 

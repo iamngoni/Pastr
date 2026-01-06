@@ -1,14 +1,9 @@
 import AppKit
 
 enum SoundManager {
-    static func playPasteSound() {
-        guard SettingsStore.shared.playSoundEffects else { return }
-        NSSound(named: "Pop")?.play()
-    }
-
     static func playCopySound() {
         guard SettingsStore.shared.playSoundEffects else { return }
-        NSSound(named: "Blow")?.play()
+        NSSound(named: "Pop")?.play()
     }
 
     static func playPinSound() {
