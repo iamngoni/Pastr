@@ -90,7 +90,7 @@ struct ClipboardItem: Identifiable, Hashable {
 
         var objects: [NSPasteboardWriting] = [item]
         if !fileURLs.isEmpty {
-            objects.append(contentsOf: fileURLs)
+            objects.append(contentsOf: fileURLs.map { $0 as NSURL })
         }
         pasteboard.writeObjects(objects)
     }
