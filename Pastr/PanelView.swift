@@ -104,12 +104,10 @@ struct PanelView: View {
     }
 
     private var cards: some View {
-        let items = viewModel.items
-
-        return ScrollViewReader { proxy in
+        ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { _, item in
+                    ForEach(viewModel.items) { item in
                         ClipboardCardView(
                             item: item,
                             isSelected: viewModel.isSelected(item),
@@ -139,7 +137,7 @@ struct PanelView: View {
                 }
                 .padding(.vertical, 4)
             }
-            .onChange(of: viewModel.selectedIndex) { _ in
+            .onChange(of: viewModel.selectedIndex) {
                 if let selectedItem = viewModel.selectedItem {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         proxy.scrollTo(selectedItem.id, anchor: .center)
@@ -452,17 +450,21 @@ final class ArrowPassingTextField: NSTextField {
 
 private struct LinkPreviewCard: View {
     let urlString: String
+    let domain: String // Pre-computed to avoid URL parsing in body
     @ObservedObject private var linkService = LinkPreviewService.shared
+
+    init(urlString: String) {
+        self.urlString = urlString
+        // Compute domain once in init, not on every body evaluation
+        if let url = URL(string: urlString), let host = url.host {
+            self.domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        } else {
+            self.domain = urlString
+        }
+    }
 
     private var preview: LinkPreview? {
         linkService.preview(for: urlString)
-    }
-
-    private var domain: String {
-        guard let url = URL(string: urlString), let host = url.host else {
-            return urlString
-        }
-        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
     var body: some View {

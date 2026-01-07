@@ -12,6 +12,30 @@ enum SyntaxHighlighter {
     private static let functionColor = NSColor(red: 0.40, green: 0.72, blue: 0.40, alpha: 1.0) // Green
     private static let defaultColor = NSColor.white
 
+    // MARK: - Cached Regex Patterns (avoid allocation on every call)
+
+    private static let doubleQuoteStringRegex = try? NSRegularExpression(pattern: #""[^"\\]*(?:\\.[^"\\]*)*""#)
+    private static let singleQuoteStringRegex = try? NSRegularExpression(pattern: #"'[^'\\]*(?:\\.[^'\\]*)*'"#)
+    private static let templateLiteralRegex = try? NSRegularExpression(pattern: #"`[^`]*`"#)
+    private static let singleLineCommentRegex = try? NSRegularExpression(pattern: #"//.*$"#, options: .anchorsMatchLines)
+    private static let multiLineCommentRegex = try? NSRegularExpression(pattern: #"/\*[\s\S]*?\*/"#)
+    private static let hashCommentRegex = try? NSRegularExpression(pattern: #"#.*$"#, options: .anchorsMatchLines)
+    private static let numberRegex = try? NSRegularExpression(pattern: #"\b\d+\.?\d*\b"#)
+    private static let functionCallRegex = try? NSRegularExpression(pattern: #"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\("#)
+
+    // Pre-compiled keyword and type regexes
+    private static let keywordRegexes: [NSRegularExpression] = keywords.compactMap {
+        try? NSRegularExpression(pattern: #"\b"# + NSRegularExpression.escapedPattern(for: $0) + #"\b"#)
+    }
+    private static let typeRegexes: [NSRegularExpression] = types.compactMap {
+        try? NSRegularExpression(pattern: #"\b"# + NSRegularExpression.escapedPattern(for: $0) + #"\b"#)
+    }
+
+    // MARK: - Result Cache (avoid re-highlighting same text)
+
+    private static var highlightCache = NSCache<NSString, NSAttributedString>()
+    private static var codeDetectionCache = NSCache<NSString, NSNumber>()
+
     // MARK: - Keywords
 
     private static let keywords: Set<String> = [
@@ -39,32 +63,57 @@ enum SyntaxHighlighter {
         "State", "Binding", "EnvironmentObject", "StateObject"
     ]
 
+    // MARK: - Code Indicators (pre-lowercased for faster comparison)
+
+    private static let codeIndicators = [
+        "func ", "class ", "struct ", "enum ", "let ", "var ",
+        "function ", "const ", "def ", "import ", "from ",
+        "public ", "private ", "static ", "return ",
+        "if (", "if(", "for (", "for(", "while (",
+        "=> ", "->", "::", "&&", "||",
+        "();", ");", "};", "{}", "[]",
+    ]
+
     // MARK: - Detection
 
     static func isLikelyCode(_ text: String) -> Bool {
-        let codeIndicators = [
-            "func ", "class ", "struct ", "enum ", "let ", "var ",
-            "function ", "const ", "def ", "import ", "from ",
-            "public ", "private ", "static ", "return ",
-            "if (", "if(", "for (", "for(", "while (",
-            "=> ", "->", "::", "&&", "||",
-            "();", ");", "};", "{}", "[]",
-        ]
+        // Check cache first
+        let cacheKey = text as NSString
+        if let cached = codeDetectionCache.object(forKey: cacheKey) {
+            return cached.boolValue
+        }
 
         let lowercased = text.lowercased()
-        let matchCount = codeIndicators.filter { lowercased.contains($0.lowercased()) }.count
+        var matchCount = 0
+        for indicator in codeIndicators {
+            if lowercased.contains(indicator.lowercased()) {
+                matchCount += 1
+                if matchCount >= 2 { break } // Early exit optimization
+            }
+        }
 
         // Also check for common patterns
         let hasIndentation = text.contains("\n    ") || text.contains("\n\t")
         let hasBraces = text.contains("{") && text.contains("}")
         let hasParens = text.contains("(") && text.contains(")")
 
-        return matchCount >= 2 || (matchCount >= 1 && (hasIndentation || (hasBraces && hasParens)))
+        let result = matchCount >= 2 || (matchCount >= 1 && (hasIndentation || (hasBraces && hasParens)))
+
+        // Cache the result
+        codeDetectionCache.setObject(NSNumber(value: result), forKey: cacheKey)
+
+        return result
     }
 
     // MARK: - Highlighting
 
     static func highlight(_ text: String) -> NSAttributedString {
+        // Check cache first
+        let cacheKey = text as NSString
+        if let cached = highlightCache.object(forKey: cacheKey) {
+            return cached
+        }
+
         let attributed = NSMutableAttributedString(string: text)
         let fullRange = NSRange(location: 0, length: attributed.length)
 
@@ -74,54 +123,56 @@ enum SyntaxHighlighter {
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         ], range: fullRange)
 
-        // Highlight strings (double quotes)
-        highlightPattern(#""[^"\\]*(?:\\.[^"\\]*)*""#, in: attributed, with: stringColor)
-
-        // Highlight strings (single quotes)
-        highlightPattern(#"'[^'\\]*(?:\\.[^'\\]*)*'"#, in: attributed, with: stringColor)
-
-        // Highlight template literals
-        highlightPattern(#"`[^`]*`"#, in: attributed, with: stringColor)
-
-        // Highlight single-line comments
-        highlightPattern(#"//.*$"#, in: attributed, with: commentColor, options: .anchorsMatchLines)
-
-        // Highlight multi-line comments
-        highlightPattern(#"/\*[\s\S]*?\*/"#, in: attributed, with: commentColor)
-
-        // Highlight hash comments (Python, Ruby, etc.)
-        highlightPattern(#"#.*$"#, in: attributed, with: commentColor, options: .anchorsMatchLines)
-
-        // Highlight numbers
-        highlightPattern(#"\b\d+\.?\d*\b"#, in: attributed, with: numberColor)
-
-        // Highlight keywords
-        for keyword in keywords {
-            highlightPattern(#"\b"# + NSRegularExpression.escapedPattern(for: keyword) + #"\b"#,
-                           in: attributed, with: keywordColor)
+        // Use cached regexes for highlighting
+        if let regex = doubleQuoteStringRegex {
+            applyHighlight(regex: regex, in: attributed, with: stringColor)
+        }
+        if let regex = singleQuoteStringRegex {
+            applyHighlight(regex: regex, in: attributed, with: stringColor)
+        }
+        if let regex = templateLiteralRegex {
+            applyHighlight(regex: regex, in: attributed, with: stringColor)
+        }
+        if let regex = singleLineCommentRegex {
+            applyHighlight(regex: regex, in: attributed, with: commentColor)
+        }
+        if let regex = multiLineCommentRegex {
+            applyHighlight(regex: regex, in: attributed, with: commentColor)
+        }
+        if let regex = hashCommentRegex {
+            applyHighlight(regex: regex, in: attributed, with: commentColor)
+        }
+        if let regex = numberRegex {
+            applyHighlight(regex: regex, in: attributed, with: numberColor)
         }
 
-        // Highlight types (capitalized words that are known types)
-        for type in types {
-            highlightPattern(#"\b"# + NSRegularExpression.escapedPattern(for: type) + #"\b"#,
-                           in: attributed, with: typeColor)
+        // Highlight keywords using pre-compiled regexes
+        for regex in keywordRegexes {
+            applyHighlight(regex: regex, in: attributed, with: keywordColor)
+        }
+
+        // Highlight types using pre-compiled regexes
+        for regex in typeRegexes {
+            applyHighlight(regex: regex, in: attributed, with: typeColor)
         }
 
         // Highlight function calls
-        highlightPattern(#"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\("#, in: attributed, with: functionColor, captureGroup: 1)
+        if let regex = functionCallRegex {
+            applyHighlight(regex: regex, in: attributed, with: functionColor, captureGroup: 1)
+        }
+
+        // Cache the result
+        highlightCache.setObject(attributed, forKey: cacheKey)
 
         return attributed
     }
 
-    private static func highlightPattern(
-        _ pattern: String,
+    private static func applyHighlight(
+        regex: NSRegularExpression,
         in attributed: NSMutableAttributedString,
         with color: NSColor,
-        options: NSRegularExpression.Options = [],
         captureGroup: Int = 0
     ) {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
-
         let string = attributed.string
         let range = NSRange(location: 0, length: string.utf16.count)
 
