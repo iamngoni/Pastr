@@ -296,8 +296,19 @@ struct OnboardingView: View {
     }
 
     private func requestAccessibilityPermission() {
+        // First try to prompt via AXIsProcessTrustedWithOptions
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
+        let alreadyGranted = AXIsProcessTrustedWithOptions(options)
+
+        if alreadyGranted {
+            accessibilityGranted = true
+            return
+        }
+
+        // Also open System Settings directly to Accessibility
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
 
         // Poll for permission changes
         isCheckingPermissions = true
@@ -305,8 +316,8 @@ struct OnboardingView: View {
             let granted = AXIsProcessTrustedWithOptions(nil)
             if granted {
                 DispatchQueue.main.async {
-                    accessibilityGranted = true
-                    isCheckingPermissions = false
+                    self.accessibilityGranted = true
+                    self.isCheckingPermissions = false
                 }
                 timer.invalidate()
             }
