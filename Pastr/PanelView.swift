@@ -329,13 +329,13 @@ private struct ClipboardCardView: View {
                     case .text, .other:
                         if SyntaxHighlighter.isLikelyCode(item.previewText) {
                             Text(SyntaxHighlighter.highlightedAttributedString(item.previewText))
-                                .font(.system(size: 11, weight: .regular, design: .monospaced))
-                                .lineLimit(5)
+                                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                .lineLimit(10)
                         } else {
                             Text(item.previewText)
                                 .font(.system(size: 12))
                                 .foregroundColor(.white)
-                                .lineLimit(4)
+                                .lineLimit(6)
                         }
                     case .link:
                         LinkPreviewCard(urlString: item.urlString ?? item.previewText)
