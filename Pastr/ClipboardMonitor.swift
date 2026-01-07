@@ -76,7 +76,12 @@ final class ClipboardMonitor {
         if isUniversalClipboard {
             // Don't attribute to frontmost app if it came from another device
             bundleId = nil
-            appName = "Another Device"
+            // Try to extract device name, fallback to generic label
+            if let deviceName = extractUniversalClipboardDeviceName(pasteboardItem) {
+                appName = deviceName
+            } else {
+                appName = "Another Device"
+            }
         } else {
             let frontmost = NSWorkspace.shared.frontmostApplication
             bundleId = frontmost?.bundleIdentifier
@@ -120,6 +125,74 @@ final class ClipboardMonitor {
         }
 
         return false
+    }
+
+    /// Attempts to extract the source device name from Universal Clipboard metadata
+    private func extractUniversalClipboardDeviceName(_ item: NSPasteboardItem) -> String? {
+        // Debug: Log all pasteboard types for Universal Clipboard items
+        #if DEBUG
+        print("[Pastr] Universal Clipboard detected. Available types:")
+        for type in item.types {
+            print("  - \(type.rawValue)")
+            if let data = item.data(forType: type) {
+                print("    Data size: \(data.count) bytes")
+                if data.count < 500, let str = String(data: data, encoding: .utf8) {
+                    print("    As UTF8: \(str.prefix(200))")
+                }
+            }
+        }
+        #endif
+
+        // Try known Apple pasteboard types that might contain device info
+        let potentialTypes: [NSPasteboard.PasteboardType] = [
+            NSPasteboard.PasteboardType("com.apple.is-remote-clipboard"),
+            NSPasteboard.PasteboardType("com.apple.pasteboard.source-device"),
+            NSPasteboard.PasteboardType("com.apple.UIKit.origin-device"),
+            NSPasteboard.PasteboardType("com.apple.pasteboard.sender-device-name"),
+            NSPasteboard.PasteboardType("com.apple.pasteboard.owner")
+        ]
+
+        for type in potentialTypes {
+            if let data = item.data(forType: type) {
+                // Try to decode as UTF-8 string
+                if let string = String(data: data, encoding: .utf8), !string.isEmpty {
+                    // Filter out non-printable characters and check if it looks like a device name
+                    let cleaned = string.trimmingCharacters(in: .controlCharacters)
+                    if !cleaned.isEmpty && cleaned.count < 100 {
+                        return cleaned
+                    }
+                }
+
+                // Try to decode as property list (plist)
+                if let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) {
+                    if let dict = plist as? [String: Any] {
+                        // Look for common keys that might contain device name
+                        let deviceNameKeys = ["deviceName", "device-name", "DeviceName", "senderDeviceName", "sourceName", "name"]
+                        for key in deviceNameKeys {
+                            if let name = dict[key] as? String {
+                                return name
+                            }
+                        }
+                    } else if let name = plist as? String {
+                        return name
+                    }
+                }
+            }
+        }
+
+        // Also check if there's a source app bundle ID from another device
+        if let sourceApp = item.string(forType: NSPasteboard.PasteboardType("com.apple.pasteboard.source-app")) {
+            // Extract app name from bundle ID if available
+            if sourceApp.contains(".") {
+                let components = sourceApp.split(separator: ".")
+                if let lastComponent = components.last {
+                    return String(lastComponent)
+                }
+            }
+            return sourceApp
+        }
+
+        return nil
     }
 
     private static func makeClipboardItem(
