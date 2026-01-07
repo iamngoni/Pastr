@@ -9,7 +9,6 @@ struct PanelView: View {
     let onPastePlainText: (ClipboardItem) -> Void
     let onOpenLink: (ClipboardItem) -> Void
     let onRevealInFinder: (ClipboardItem) -> Void
-    let onUpdatePinnedTitle: (ClipboardItem, String) -> Void
     let onDelete: ([ClipboardItem]) -> Void
     let onOpenSettings: () -> Void
 
@@ -180,26 +179,6 @@ struct PanelView: View {
 
         Divider()
 
-        // Edit Title (for pinned items)
-        if item.isPinned {
-            Button {
-                promptForTitle(item: item)
-            } label: {
-                Label("Edit Title", systemImage: "pencil")
-            }
-            .keyboardShortcut("e", modifiers: .command)
-        }
-
-        // Rename (Edit Title for non-pinned)
-        if !item.isPinned {
-            Button {
-                promptForTitle(item: item)
-            } label: {
-                Label("Rename", systemImage: "pencil.line")
-            }
-            .keyboardShortcut("r", modifiers: .command)
-        }
-
         // Delete
         Button(role: .destructive) {
             if viewModel.hasMultipleSelection {
@@ -219,34 +198,16 @@ struct PanelView: View {
 
         Divider()
 
-        // Pin submenu
-        Menu {
-            if item.isPinned {
-                Button {
-                    onTogglePin(item)
-                } label: {
-                    Label("Unpin", systemImage: "pin.slash")
-                }
-            } else {
-                Button {
-                    onTogglePin(item)
-                } label: {
-                    Label("Pin to Top", systemImage: "pin")
-                }
-            }
-        } label: {
-            Label("Pin", systemImage: "pin")
-        }
-
-        Divider()
-
-        // Preview
+        // Pin (simple toggle, no submenu)
         Button {
-            showPreview(for: item)
+            onTogglePin(item)
         } label: {
-            Label("Preview", systemImage: "eye")
+            if item.isPinned {
+                Label("Unpin", systemImage: "pin.slash")
+            } else {
+                Label("Pin", systemImage: "pin")
+            }
         }
-        .keyboardShortcut(.space, modifiers: [])
 
         // Open Link (for links)
         if item.type == .link, item.urlString != nil {
@@ -278,11 +239,6 @@ struct PanelView: View {
         }
     }
 
-    private func showPreview(for item: ClipboardItem) {
-        // Quick Look preview - for now just copy to clipboard
-        onCopy(item)
-    }
-
     private func shareItem(_ item: ClipboardItem) {
         let content: Any
         if let text = item.textContent {
@@ -298,21 +254,6 @@ struct PanelView: View {
         let picker = NSSharingServicePicker(items: [content])
         if let window = NSApp.keyWindow, let contentView = window.contentView {
             picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
-        }
-    }
-
-    private func promptForTitle(item: ClipboardItem) {
-        let alert = NSAlert()
-        alert.messageText = "Pinned Title"
-        alert.informativeText = "Set a custom label for this pinned item."
-        let field = NSTextField(string: item.pinnedTitle ?? "")
-        field.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
-        alert.accessoryView = field
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        if alert.runModal() == .alertFirstButtonReturn {
-            onUpdatePinnedTitle(item, field.stringValue)
         }
     }
 }

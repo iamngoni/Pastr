@@ -14,7 +14,6 @@ final class PanelWindowController {
     private let onPastePlainText: (ClipboardItem) -> Void
     private let onOpenLink: (ClipboardItem) -> Void
     private let onRevealInFinder: (ClipboardItem) -> Void
-    private let onUpdatePinnedTitle: (ClipboardItem, String) -> Void
     private let onDelete: ([ClipboardItem]) -> Void
     private let onOpenSettings: () -> Void
     private var clickMonitor: Any?
@@ -32,7 +31,6 @@ final class PanelWindowController {
         onPastePlainText: @escaping (ClipboardItem) -> Void,
         onOpenLink: @escaping (ClipboardItem) -> Void,
         onRevealInFinder: @escaping (ClipboardItem) -> Void,
-        onUpdatePinnedTitle: @escaping (ClipboardItem, String) -> Void,
         onDelete: @escaping ([ClipboardItem]) -> Void,
         onOpenSettings: @escaping () -> Void
     ) {
@@ -43,7 +41,6 @@ final class PanelWindowController {
         self.onPastePlainText = onPastePlainText
         self.onOpenLink = onOpenLink
         self.onRevealInFinder = onRevealInFinder
-        self.onUpdatePinnedTitle = onUpdatePinnedTitle
         self.onDelete = onDelete
         self.onOpenSettings = onOpenSettings
         self.viewModel = PanelViewModel(historyStore: historyStore)
@@ -69,7 +66,6 @@ final class PanelWindowController {
             onPastePlainText: onPastePlainText,
             onOpenLink: onOpenLink,
             onRevealInFinder: onRevealInFinder,
-            onUpdatePinnedTitle: onUpdatePinnedTitle,
             onDelete: onDelete,
             onOpenSettings: onOpenSettings
         )

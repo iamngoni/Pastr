@@ -43,9 +43,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onRevealInFinder: { [weak self] item in
                 self?.clipboardActions.revealInFinder(item)
             },
-            onUpdatePinnedTitle: { [weak self] item, title in
-                self?.historyStore.updatePinnedTitle(for: item, title: title)
-            },
             onDelete: { [weak self] items in
                 self?.historyStore.delete(items)
             },
