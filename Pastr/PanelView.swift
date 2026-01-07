@@ -315,14 +315,13 @@ private struct ClipboardCardView: View {
                     case .richText:
                         if let attributed = item.attributedPreview {
                             Text(attributed)
-                                .font(.system(size: 12))
-                                .foregroundColor(.white)
-                                .lineLimit(4)
+                                .font(.system(size: 10))
+                                .lineLimit(10)
                         } else {
                             Text(item.previewText)
-                                .font(.system(size: 12))
+                                .font(.system(size: 10))
                                 .foregroundColor(.white)
-                                .lineLimit(4)
+                                .lineLimit(10)
                         }
                     case .text, .other:
                         if SyntaxHighlighter.isLikelyCode(item.previewText) {
