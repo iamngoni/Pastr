@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D6C903022F110FE60034C416 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = F6D0B1C2D3E4F5A6B7C8D9E2 /* Sentry */; };
 		D6E2E6C12F10FC2A00BDDCCE /* OpenGraph in Frameworks */ = {isa = PBXBuildFile; productRef = E8A1B2C3D4E5F6A7B8C9D0E2 /* OpenGraph */; };
 /* End PBXBuildFile section */
 
@@ -56,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D6C903022F110FE60034C416 /* Sentry in Frameworks */,
 				D6E2E6C12F10FC2A00BDDCCE /* OpenGraph in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -204,7 +206,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				E8A1B2C3D4E5F6A7B8C9D0E1 /* XCRemoteSwiftPackageReference "OpenGraph" */,
-				F6D0B1C2D3E4F5A6B7C8D9E1 /* XCRemoteSwiftPackageReference "Sentry" */,
+				F6D0B1C2D3E4F5A6B7C8D9E1 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D6CF593C2F0CFBC700DDB118 /* Products */;
@@ -596,7 +598,7 @@
 				minimumVersion = 1.6.0;
 			};
 		};
-		F6D0B1C2D3E4F5A6B7C8D9E1 /* XCRemoteSwiftPackageReference "Sentry" */ = {
+		F6D0B1C2D3E4F5A6B7C8D9E1 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
 			requirement = {
@@ -614,7 +616,7 @@
 		};
 		F6D0B1C2D3E4F5A6B7C8D9E2 /* Sentry */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = F6D0B1C2D3E4F5A6B7C8D9E1 /* XCRemoteSwiftPackageReference "Sentry" */;
+			package = F6D0B1C2D3E4F5A6B7C8D9E1 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
 			productName = Sentry;
 		};
 /* End XCSwiftPackageProductDependency section */
