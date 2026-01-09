@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Main Settings View
 
@@ -408,7 +409,7 @@ struct SettingsView: View {
 
     private func startBackup() {
         let panel = NSSavePanel()
-        panel.allowedFileTypes = ["pastrbackup"]
+        panel.allowedContentTypes = [UTType(exportedAs: "dev.iamngoni.pastr.backup")]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue =
             "Pastr Backup \(DateFormatter.backupNameFormatter.string(from: Date())).pastrbackup"
@@ -426,7 +427,7 @@ struct SettingsView: View {
 
     private func startRestore() {
         let panel = NSOpenPanel()
-        panel.allowedFileTypes = ["pastrbackup", "json"]
+        panel.allowedContentTypes = [UTType(exportedAs: "dev.iamngoni.pastr.backup"), .json]
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         presentOpenPanel(panel) { url in
@@ -451,11 +452,11 @@ struct SettingsView: View {
         panel.canCreateDirectories = true
         switch format {
         case .json:
-            panel.allowedFileTypes = ["json"]
+            panel.allowedContentTypes = [.json]
             panel.nameFieldStringValue =
                 "Pastr Export \(DateFormatter.backupNameFormatter.string(from: Date())).json"
         case .csv:
-            panel.allowedFileTypes = ["csv"]
+            panel.allowedContentTypes = [.commaSeparatedText]
             panel.nameFieldStringValue =
                 "Pastr Export \(DateFormatter.backupNameFormatter.string(from: Date())).csv"
         }
@@ -1129,3 +1130,4 @@ struct GlassCard<Content: View>: View {
             .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
     }
 }
+
