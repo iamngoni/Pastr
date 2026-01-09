@@ -6,6 +6,7 @@
         <attribute name="fingerprint" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="UUID"/>
         <attribute name="imageData" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
+        <attribute name="isPinned" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="pinnedTitle" optional="YES" attributeType="String"/>
         <attribute name="rtfData" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
         <attribute name="sourceAppBundleId" optional="YES" attributeType="String"/>

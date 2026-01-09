@@ -68,7 +68,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardMonitor = ClipboardMonitor(historyStore: historyStore)
         clipboardMonitor?.start()
 
-        historyStore.mergePinned(pinnedStore.fetchPinned())
+        if settingsStore.iCloudSyncEnabled {
+            if let cloudItems = try? pinnedStore.fetchAll() {
+                historyStore.mergeCloudItems(cloudItems)
+            }
+            historyStore.syncAllToCloud()
+        }
 
         bindSettings()
 

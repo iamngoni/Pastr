@@ -94,6 +94,35 @@ struct ClipboardItem: Identifiable, Hashable {
         }
         pasteboard.writeObjects(objects)
     }
+
+    func itemProvider() -> NSItemProvider {
+        let provider = NSItemProvider()
+
+        if let textContent {
+            provider.registerObject(textContent as NSString, visibility: .all)
+        }
+
+        if let urlString, let url = URL(string: urlString) {
+            provider.registerObject(url as NSURL, visibility: .all)
+        }
+
+        if let image {
+            provider.registerObject(image, visibility: .all)
+        }
+
+        if let fileURL = fileURLs.first {
+            provider.registerObject(fileURL as NSURL, visibility: .all)
+        }
+
+        for (type, data) in typesData {
+            provider.registerDataRepresentation(forTypeIdentifier: type.rawValue, visibility: .all) { completion in
+                completion(data, nil)
+                return nil
+            }
+        }
+
+        return provider
+    }
 }
 
 enum ClipboardItemType: String, CaseIterable {

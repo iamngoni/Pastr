@@ -5,6 +5,7 @@ final class ClipboardHistoryStore: ObservableObject {
     static let shared = ClipboardHistoryStore()
 
     @Published private(set) var items: [ClipboardItem] = []
+    @Published private(set) var syncState: SyncState = .idle
 
     private let settings = SettingsStore.shared
     private let persistence = HistoryPersistence()
@@ -17,6 +18,7 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     func add(_ item: ClipboardItem) {
+        let itemToPersist: ClipboardItem
         if let existingIndex = items.firstIndex(where: { $0.fingerprint == item.fingerprint }) {
             let existing = items[existingIndex]
             var updated = item
@@ -24,12 +26,16 @@ final class ClipboardHistoryStore: ObservableObject {
             updated.pinnedTitle = existing.pinnedTitle
             items.remove(at: existingIndex)
             items.insert(updated, at: 0)
+            itemToPersist = updated
         } else {
             items.insert(item, at: 0)
+            itemToPersist = item
         }
 
-        prune()
+        let removed = prune()
         persistence.save(items)
+        syncUpsert(itemToPersist)
+        syncRemove(removed)
         SoundManager.playCopySound()
     }
 
@@ -48,7 +54,7 @@ final class ClipboardHistoryStore: ObservableObject {
         if updated.isPinned {
             updated.isPinned = false
             items[index] = updated
-            pinnedStore.removePinned(fingerprint: updated.fingerprint)
+            syncUpsert(updated)
             SoundManager.playPinSound()
         } else {
             let currentPinned = items.filter { $0.isPinned }.count
@@ -58,7 +64,7 @@ final class ClipboardHistoryStore: ObservableObject {
             }
             updated.isPinned = true
             items[index] = updated
-            pinnedStore.savePinned(updated)
+            syncUpsert(updated)
             SoundManager.playPinSound()
         }
         persistence.save(items)
@@ -69,52 +75,86 @@ final class ClipboardHistoryStore: ObservableObject {
         var updated = items[index]
         updated.pinnedTitle = title
         items[index] = updated
-        if updated.isPinned {
-            pinnedStore.savePinned(updated)
-        }
+        syncUpsert(updated)
         persistence.save(items)
     }
 
     func clearUnpinnedItems() {
+        let removed = items.filter { !$0.isPinned }
         items.removeAll { !$0.isPinned }
         persistence.save(items)
+        syncRemove(removed)
     }
 
     func delete(_ item: ClipboardItem) {
-        if item.isPinned {
-            pinnedStore.removePinned(fingerprint: item.fingerprint)
-        }
+        syncRemove([item])
         items.removeAll { $0.id == item.id }
         persistence.save(items)
     }
 
     func delete(_ itemsToDelete: [ClipboardItem]) {
         let idsToDelete = Set(itemsToDelete.map { $0.id })
-        for item in itemsToDelete where item.isPinned {
-            pinnedStore.removePinned(fingerprint: item.fingerprint)
-        }
+        syncRemove(itemsToDelete)
         items.removeAll { idsToDelete.contains($0.id) }
         persistence.save(items)
     }
 
-    func mergePinned(_ pinnedItems: [ClipboardItem]) {
-        for pinned in pinnedItems {
-            if let index = items.firstIndex(where: { $0.fingerprint == pinned.fingerprint }) {
-                var updated = items[index]
-                updated.isPinned = true
-                updated.pinnedTitle = pinned.pinnedTitle
-                items[index] = updated
+    func mergeCloudItems(_ cloudItems: [ClipboardItem]) {
+        for cloudItem in cloudItems {
+            if let index = items.firstIndex(where: { $0.fingerprint == cloudItem.fingerprint }) {
+                items[index] = cloudItem
             } else {
-                items.insert(pinned, at: 0)
+                items.insert(cloudItem, at: 0)
             }
         }
+        items.sort { $0.createdAt > $1.createdAt }
         persistence.save(items)
     }
 
-    private func prune() {
+    func syncAllToCloud() {
+        guard settings.iCloudSyncEnabled else { return }
+        for item in items {
+            try? pinnedStore.upsert(item)
+        }
+    }
+
+    func syncNow() {
+        guard settings.iCloudSyncEnabled else { return }
+        syncState = .syncing
+        let localItems = items
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            do {
+                let cloudItems = try self.pinnedStore.fetchAll()
+                DispatchQueue.main.async {
+                    self.mergeCloudItems(cloudItems)
+                }
+                for item in localItems {
+                    try self.pinnedStore.upsert(item)
+                }
+                DispatchQueue.main.async {
+                    self.syncState = .success
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.syncState = .failed(message: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func clearSyncState() {
+        syncState = .idle
+    }
+
+    @discardableResult
+    private func prune() -> [ClipboardItem] {
+        var removed: [ClipboardItem] = []
         if !settings.historyUnlimited {
             let cutoff = Calendar.current.date(byAdding: .day, value: -settings.historyMaxDays, to: Date())
             if let cutoff {
+                let expired = items.filter { !$0.isPinned && $0.createdAt < cutoff }
+                removed.append(contentsOf: expired)
                 items.removeAll { !$0.isPinned && $0.createdAt < cutoff }
             }
 
@@ -131,18 +171,53 @@ final class ClipboardHistoryStore: ObservableObject {
                         unpinnedCount += 1
                     }
                 }
+                let keptIds = Set(trimmed.map { $0.id })
+                let trimmedOut = items.filter { !keptIds.contains($0.id) }
+                removed.append(contentsOf: trimmedOut)
                 items = trimmed
             }
         }
+        return removed
     }
 
     private func bindSettings() {
         Publishers.CombineLatest3(settings.$historyMaxItems, settings.$historyMaxDays, settings.$historyUnlimited)
             .sink { [weak self] _, _, _ in
                 guard let self else { return }
-                self.prune()
+                let removed = self.prune()
                 self.persistence.save(self.items)
+                self.syncRemove(removed)
+            }
+            .store(in: &cancellables)
+
+        settings.$iCloudSyncEnabled
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                guard let self, enabled else { return }
+                if let cloudItems = try? self.pinnedStore.fetchAll() {
+                    self.mergeCloudItems(cloudItems)
+                }
+                self.syncAllToCloud()
             }
             .store(in: &cancellables)
     }
+
+    private func syncUpsert(_ item: ClipboardItem) {
+        guard settings.iCloudSyncEnabled else { return }
+        try? pinnedStore.upsert(item)
+    }
+
+    private func syncRemove(_ items: [ClipboardItem]) {
+        guard settings.iCloudSyncEnabled else { return }
+        for item in items {
+            try? pinnedStore.remove(fingerprint: item.fingerprint)
+        }
+    }
+}
+
+enum SyncState: Equatable {
+    case idle
+    case syncing
+    case success
+    case failed(message: String)
 }
