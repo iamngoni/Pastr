@@ -12,5 +12,6 @@
 - Added Sentry crash reporting.
 - Registered Pastr backup file type and enabled user-selected file read/write for save panels.
 - Added a custom document icon for .pastrbackup files.
+- Added a Quick Preview toggle to disable hover previews.
 - Updated Settings About link to the Pastr website.
 - Improved selected-card highlight visibility.
