@@ -114,6 +114,7 @@ struct PanelView: View {
                             onTogglePin: { onTogglePin(item) }
                         )
                         .id(item.id)
+                        .onDrag { item.itemProvider() }
                         .gesture(
                             TapGesture()
                                 .modifiers(.command)
@@ -354,8 +355,9 @@ private struct ClipboardCardView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(isSelected ? Color.white.opacity(0.7) : Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(isSelected ? Color.white.opacity(0.95) : Color.white.opacity(0.08), lineWidth: isSelected ? 1.6 : 1)
             )
+            .shadow(color: isSelected ? Color.white.opacity(0.25) : .clear, radius: 6, x: 0, y: 0)
 
             Button(action: onTogglePin) {
                 Image(systemName: item.isPinned ? "pin.fill" : "pin")
