@@ -9,6 +9,7 @@ final class PanelViewModel: ObservableObject {
     @Published private(set) var previewItem: ClipboardItem?
 
     private let historyStore: ClipboardHistoryStore
+    private let settings = SettingsStore.shared
     private var previewSource: PreviewSource?
     private var hoverWorkItem: DispatchWorkItem?
 
@@ -135,6 +136,7 @@ final class PanelViewModel: ObservableObject {
     }
 
     func hoverPreview(for item: ClipboardItem, isHovering: Bool) {
+        guard settings.enableQuickPreview else { return }
         guard previewSource != .explicit else { return }
 
         if isHovering {

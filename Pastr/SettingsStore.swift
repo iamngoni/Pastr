@@ -70,6 +70,10 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(encryptBackups, forKey: Keys.encryptBackups) }
     }
 
+    @Published var enableQuickPreview: Bool {
+        didSet { defaults.set(enableQuickPreview, forKey: Keys.enableQuickPreview) }
+    }
+
     @Published var ignoreConfidentialContent: Bool {
         didSet { defaults.set(ignoreConfidentialContent, forKey: Keys.ignoreConfidentialContent) }
     }
@@ -124,6 +128,8 @@ final class SettingsStore: ObservableObject {
         let storedGenerateLinkPreviews = defaults.object(forKey: Keys.generateLinkPreviews)
         generateLinkPreviews = storedGenerateLinkPreviews == nil ? true : defaults.bool(forKey: Keys.generateLinkPreviews)
         encryptBackups = defaults.bool(forKey: Keys.encryptBackups)
+        let storedQuickPreview = defaults.object(forKey: Keys.enableQuickPreview)
+        enableQuickPreview = storedQuickPreview == nil ? true : defaults.bool(forKey: Keys.enableQuickPreview)
 
         let storedIgnoreConfidential = defaults.object(forKey: Keys.ignoreConfidentialContent)
         ignoreConfidentialContent = storedIgnoreConfidential == nil ? true : defaults.bool(forKey: Keys.ignoreConfidentialContent)
@@ -156,6 +162,7 @@ final class SettingsStore: ObservableObject {
         static let showDuringScreenSharing = "showDuringScreenSharing"
         static let generateLinkPreviews = "generateLinkPreviews"
         static let encryptBackups = "encryptBackups"
+        static let enableQuickPreview = "enableQuickPreview"
         static let ignoreConfidentialContent = "ignoreConfidentialContent"
         static let ignoreTransientContent = "ignoreTransientContent"
         static let ignoredAppBundleIds = "ignoredAppBundleIds"

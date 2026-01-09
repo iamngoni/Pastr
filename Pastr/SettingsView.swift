@@ -74,6 +74,12 @@ struct SettingsView: View {
                         )
 
                         SettingsToggleRow(
+                            title: "Quick preview",
+                            subtitle: "Show hover previews in the panel",
+                            isOn: $settings.enableQuickPreview
+                        )
+
+                        SettingsToggleRow(
                             title: "Ignore confidential content",
                             subtitle: "Skip passwords and sensitive data from password managers",
                             isOn: $settings.ignoreConfidentialContent
