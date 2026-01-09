@@ -125,15 +125,19 @@ struct SettingsView: View {
                                         ProgressView()
                                             .controlSize(.small)
                                     }
-                                    Text(historyStore.syncState == .syncing ? "Syncing..." : "Sync Now")
+                                    Text(
+                                        historyStore.syncState == .syncing
+                                            ? "Syncing..." : "Sync Now")
                                 }
                             }
                             .buttonStyle(SecondaryButtonStyle())
-                            .disabled(!settings.iCloudSyncEnabled || historyStore.syncState == .syncing)
+                            .disabled(
+                                !settings.iCloudSyncEnabled || historyStore.syncState == .syncing
+                            )
                             .opacity(settings.iCloudSyncEnabled ? 1 : 0.5)
                         }
 
-                        if case let .failed(message) = historyStore.syncState {
+                        if case .failed(let message) = historyStore.syncState {
                             Text("Sync failed: \(message)")
                                 .font(.system(size: 11))
                                 .foregroundColor(Color(red: 0.98, green: 0.45, blue: 0.4))
@@ -247,7 +251,9 @@ struct SettingsView: View {
                                 keyCode: $settings.hotKeyKeyCode,
                                 modifiers: $settings.hotKeyModifiers
                             ) {
-                                hotKeyManager.register(keyCode: settings.hotKeyKeyCode, modifiers: settings.hotKeyModifiers)
+                                hotKeyManager.register(
+                                    keyCode: settings.hotKeyKeyCode,
+                                    modifiers: settings.hotKeyModifiers)
                             }
                             .frame(width: 120, height: 28)
                         }
@@ -262,7 +268,9 @@ struct SettingsView: View {
                             Button("⌘B") {
                                 settings.hotKeyKeyCode = UInt32(kVK_ANSI_B)
                                 settings.hotKeyModifiers = UInt32(cmdKey)
-                                hotKeyManager.register(keyCode: settings.hotKeyKeyCode, modifiers: settings.hotKeyModifiers)
+                                hotKeyManager.register(
+                                    keyCode: settings.hotKeyKeyCode,
+                                    modifiers: settings.hotKeyModifiers)
                             }
                             .buttonStyle(SecondaryButtonStyle())
                         }
@@ -276,7 +284,7 @@ struct SettingsView: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(Color(white: 0.85))
 
-                                Text("Version 1.0")
+                                Text("Version 1.1")
                                     .font(.system(size: 11))
                                     .foregroundColor(Color(white: 0.5))
                             }
@@ -380,13 +388,18 @@ struct SettingsView: View {
                 }
             )
         }
-        .alert("Backup", isPresented: Binding(get: {
-            backupAlertMessage != nil
-        }, set: { newValue in
-            if !newValue {
-                backupAlertMessage = nil
-            }
-        })) {
+        .alert(
+            "Backup",
+            isPresented: Binding(
+                get: {
+                    backupAlertMessage != nil
+                },
+                set: { newValue in
+                    if !newValue {
+                        backupAlertMessage = nil
+                    }
+                })
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(backupAlertMessage ?? "")
@@ -397,7 +410,8 @@ struct SettingsView: View {
         let panel = NSSavePanel()
         panel.allowedFileTypes = ["pastrbackup"]
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = "Pastr Backup \(DateFormatter.backupNameFormatter.string(from: Date())).pastrbackup"
+        panel.nameFieldStringValue =
+            "Pastr Backup \(DateFormatter.backupNameFormatter.string(from: Date())).pastrbackup"
         presentSavePanel(panel) { url in
             guard let url else { return }
             if settings.encryptBackups {
@@ -438,10 +452,12 @@ struct SettingsView: View {
         switch format {
         case .json:
             panel.allowedFileTypes = ["json"]
-            panel.nameFieldStringValue = "Pastr Export \(DateFormatter.backupNameFormatter.string(from: Date())).json"
+            panel.nameFieldStringValue =
+                "Pastr Export \(DateFormatter.backupNameFormatter.string(from: Date())).json"
         case .csv:
             panel.allowedFileTypes = ["csv"]
-            panel.nameFieldStringValue = "Pastr Export \(DateFormatter.backupNameFormatter.string(from: Date())).csv"
+            panel.nameFieldStringValue =
+                "Pastr Export \(DateFormatter.backupNameFormatter.string(from: Date())).csv"
         }
         presentSavePanel(panel) { url in
             guard let url else { return }
@@ -607,8 +623,8 @@ private struct BackupPasswordPrompt: View {
     }
 }
 
-private extension DateFormatter {
-    static let backupNameFormatter: DateFormatter = {
+extension DateFormatter {
+    fileprivate static let backupNameFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
@@ -688,11 +704,12 @@ struct IgnoredAppRow: View {
             "com.agilebits.onepassword7": "1Password 7",
             "com.1password.1password": "1Password",
             "com.lastpass.LastPass": "LastPass",
-            "com.bitwarden.desktop": "Bitwarden"
+            "com.bitwarden.desktop": "Bitwarden",
         ]
 
         let name = knownApps[bundleId] ?? bundleId
-        let fallbackIcon = NSImage(systemSymbolName: "app.fill", accessibilityDescription: nil) ?? NSImage()
+        let fallbackIcon =
+            NSImage(systemSymbolName: "app.fill", accessibilityDescription: nil) ?? NSImage()
         return (name, fallbackIcon)
     }
 
@@ -751,8 +768,8 @@ struct AppPickerView: View {
             return installedApps
         }
         return installedApps.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.bundleId.localizedCaseInsensitiveContains(searchText)
+            $0.name.localizedCaseInsensitiveContains(searchText)
+                || $0.bundleId.localizedCaseInsensitiveContains(searchText)
         }
     }
 
@@ -827,7 +844,7 @@ struct AppPickerView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
-                            .background(Color.white.opacity(0.001)) // For hit testing
+                            .background(Color.white.opacity(0.001))  // For hit testing
                         }
                         .buttonStyle(.plain)
 
@@ -863,22 +880,26 @@ struct AppPickerView: View {
                 "/Applications",
                 "/System/Applications",
                 "/System/Applications/Utilities",
-                NSHomeDirectory() + "/Applications"
+                NSHomeDirectory() + "/Applications",
             ]
 
             for directory in appDirectories {
-                guard let contents = try? FileManager.default.contentsOfDirectory(atPath: directory) else { continue }
+                guard let contents = try? FileManager.default.contentsOfDirectory(atPath: directory)
+                else { continue }
 
                 for item in contents where item.hasSuffix(".app") {
                     let appPath = (directory as NSString).appendingPathComponent(item)
-                    let bundlePath = (appPath as NSString).appendingPathComponent("Contents/Info.plist")
+                    let bundlePath = (appPath as NSString).appendingPathComponent(
+                        "Contents/Info.plist")
 
                     guard let plist = NSDictionary(contentsOfFile: bundlePath),
-                          let bundleId = plist["CFBundleIdentifier"] as? String else { continue }
+                        let bundleId = plist["CFBundleIdentifier"] as? String
+                    else { continue }
 
-                    let appName = (plist["CFBundleDisplayName"] as? String) ??
-                                  (plist["CFBundleName"] as? String) ??
-                                  (item as NSString).deletingPathExtension
+                    let appName =
+                        (plist["CFBundleDisplayName"] as? String)
+                        ?? (plist["CFBundleName"] as? String)
+                        ?? (item as NSString).deletingPathExtension
 
                     let icon = NSWorkspace.shared.icon(forFile: appPath)
 
@@ -986,7 +1007,9 @@ struct HistoryDurationPicker: View {
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(selectedDuration == duration ? Color(red: 0.04, green: 0.52, blue: 1) : Color.clear)
+                                .fill(
+                                    selectedDuration == duration
+                                        ? Color(red: 0.04, green: 0.52, blue: 1) : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)
@@ -1068,14 +1091,21 @@ struct GlassCard<Content: View>: View {
     var borderColor: Color = Color.white.opacity(0.06)
     @ViewBuilder let content: () -> Content
 
-    init(cornerRadius: CGFloat, opacity: CGFloat = 0.6, borderColor: Color = Color.white.opacity(0.06), @ViewBuilder content: @escaping () -> Content) {
+    init(
+        cornerRadius: CGFloat, opacity: CGFloat = 0.6,
+        borderColor: Color = Color.white.opacity(0.06),
+        @ViewBuilder content: @escaping () -> Content
+    ) {
         self.cornerRadius = cornerRadius
         self.opacity = opacity
         self.borderColor = borderColor
         self.content = content
     }
 
-    init(cornerRadius: CGFloat, opacity: CGFloat = 0.6, borderColor: Color = Color.white.opacity(0.06)) where Content == EmptyView {
+    init(
+        cornerRadius: CGFloat, opacity: CGFloat = 0.6,
+        borderColor: Color = Color.white.opacity(0.06)
+    ) where Content == EmptyView {
         self.cornerRadius = cornerRadius
         self.opacity = opacity
         self.borderColor = borderColor
