@@ -33,6 +33,8 @@
             <array>
                 <string>public.data</string>
             </array>
+            <key>UTTypeIconName</key>
+            <string>BackupDocument</string>
             <key>UTTypeTagSpecification</key>
             <dict>
                 <key>public.filename-extension</key>
@@ -53,6 +55,10 @@
             <array>
                 <string>dev.iamngoni.pastr.backup</string>
             </array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>CFBundleTypeIconFile</key>
+            <string>BackupDocument.icns</string>
             <key>LSHandlerRank</key>
             <string>Owner</string>
         </dict>
