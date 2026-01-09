@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Sentry
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -17,6 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        SentrySDK.start { options in
+            options.dsn = "https://47a5a589a8006e54c4ea2b8de115b482@o1107818.ingest.us.sentry.io/4510679814307840"
+#if DEBUG
+            options.debug = true
+#endif
+        }
+
         NSApp.setActivationPolicy(.accessory)
 
         // Request accessibility permissions (needed for pasting via CGEvent)

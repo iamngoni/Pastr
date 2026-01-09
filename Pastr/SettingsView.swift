@@ -373,7 +373,8 @@ struct SettingsView: View {
         panel.allowedFileTypes = ["pastrbackup"]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = "Pastr Backup \(DateFormatter.backupNameFormatter.string(from: Date())).pastrbackup"
-        if panel.runModal() == .OK, let url = panel.url {
+        presentSavePanel(panel) { url in
+            guard let url else { return }
             if settings.encryptBackups {
                 pendingBackupURL = url
                 passwordPromptMode = .backup
@@ -389,7 +390,8 @@ struct SettingsView: View {
         panel.allowedFileTypes = ["pastrbackup", "json"]
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
-        if panel.runModal() == .OK, let url = panel.url {
+        presentOpenPanel(panel) { url in
+            guard let url else { return }
             do {
                 let data = try Data(contentsOf: url)
                 if backupManager.isEncryptedBackup(data) {
@@ -416,7 +418,8 @@ struct SettingsView: View {
             panel.allowedFileTypes = ["csv"]
             panel.nameFieldStringValue = "Pastr Export \(DateFormatter.backupNameFormatter.string(from: Date())).csv"
         }
-        if panel.runModal() == .OK, let url = panel.url {
+        presentSavePanel(panel) { url in
+            guard let url else { return }
             do {
                 try backupManager.export(items: historyStore.items, to: url, format: format)
                 backupAlertMessage = "Export saved."
@@ -464,6 +467,30 @@ struct SettingsView: View {
         pendingBackupURL = nil
         pendingRestoreURL = nil
         showPasswordPrompt = false
+    }
+
+    private func presentSavePanel(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.keyWindow ?? NSApp.windows.first {
+            panel.beginSheetModal(for: window) { response in
+                completion(response == .OK ? panel.url : nil)
+            }
+        } else {
+            let response = panel.runModal()
+            completion(response == .OK ? panel.url : nil)
+        }
+    }
+
+    private func presentOpenPanel(_ panel: NSOpenPanel, completion: @escaping (URL?) -> Void) {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.keyWindow ?? NSApp.windows.first {
+            panel.beginSheetModal(for: window) { response in
+                completion(response == .OK ? panel.url : nil)
+            }
+        } else {
+            let response = panel.runModal()
+            completion(response == .OK ? panel.url : nil)
+        }
     }
 }
 

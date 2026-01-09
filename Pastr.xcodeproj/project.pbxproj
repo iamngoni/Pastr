@@ -118,6 +118,7 @@
 			name = Pastr;
 			packageProductDependencies = (
 				E8A1B2C3D4E5F6A7B8C9D0E2 /* OpenGraph */,
+				F6D0B1C2D3E4F5A6B7C8D9E2 /* Sentry */,
 			);
 			productName = Pastr;
 			productReference = D6CF593B2F0CFBC700DDB118 /* Pastr.app */;
@@ -203,6 +204,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				E8A1B2C3D4E5F6A7B8C9D0E1 /* XCRemoteSwiftPackageReference "OpenGraph" */,
+				F6D0B1C2D3E4F5A6B7C8D9E1 /* XCRemoteSwiftPackageReference "Sentry" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D6CF593C2F0CFBC700DDB118 /* Products */;
@@ -596,6 +598,14 @@
 				minimumVersion = 1.6.0;
 			};
 		};
+		F6D0B1C2D3E4F5A6B7C8D9E1 /* XCRemoteSwiftPackageReference "Sentry" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -603,6 +613,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E8A1B2C3D4E5F6A7B8C9D0E1 /* XCRemoteSwiftPackageReference "OpenGraph" */;
 			productName = OpenGraph;
+		};
+		F6D0B1C2D3E4F5A6B7C8D9E2 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F6D0B1C2D3E4F5A6B7C8D9E1 /* XCRemoteSwiftPackageReference "Sentry" */;
+			productName = Sentry;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
