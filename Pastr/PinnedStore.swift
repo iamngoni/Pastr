@@ -5,6 +5,7 @@ final class PinnedStore {
     static let shared = PinnedStore()
 
     private let container: NSPersistentCloudKitContainer
+    private let migrationKey = "cloudHistoryPinnedMigrationCompleted"
 
     private init() {
         container = NSPersistentCloudKitContainer(name: "Pastr")
@@ -21,78 +22,128 @@ final class PinnedStore {
         container.viewContext.automaticallyMergesChangesFromParent = true
     }
 
-    func fetchPinned() -> [ClipboardItem] {
-        let request = NSFetchRequest<PinnedClip>(entityName: "PinnedClip")
-        request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
-        guard let results = try? container.viewContext.fetch(request) else {
-            return []
-        }
-        return results.compactMap { clip in
-            guard let id = clip.id,
-                  let createdAt = clip.createdAt,
-                  let type = clip.type,
-                  let fingerprint = clip.fingerprint else {
-                return nil
+    func fetchAll() throws -> [ClipboardItem] {
+        var fetched: [ClipboardItem] = []
+        var fetchError: Error?
+
+        container.viewContext.performAndWait {
+            let request = NSFetchRequest<PinnedClip>(entityName: "PinnedClip")
+            request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
+            do {
+                let results = try container.viewContext.fetch(request)
+                var shouldMigratePinned = !UserDefaults.standard.bool(forKey: migrationKey)
+                var needsSave = false
+                fetched = results.compactMap { clip in
+                    guard let id = clip.id,
+                          let createdAt = clip.createdAt,
+                          let type = clip.type,
+                          let fingerprint = clip.fingerprint else {
+                        return nil
+                    }
+                    let isPinned: Bool
+                    if shouldMigratePinned {
+                        isPinned = true
+                        clip.isPinned = true
+                        needsSave = true
+                    } else {
+                        isPinned = clip.isPinned
+                    }
+                    return ClipboardItem(
+                        id: id,
+                        createdAt: createdAt,
+                        type: ClipboardItemType(rawValue: type) ?? .other,
+                        textContent: clip.textContent,
+                        rtfData: clip.rtfData,
+                        imageData: clip.imageData,
+                        urlString: clip.urlString,
+                        fileURLs: clip.fileBookmarkData.flatMap { Self.resolveFileBookmarks($0) } ?? [],
+                        sourceAppBundleId: clip.sourceAppBundleId,
+                        sourceAppName: clip.sourceAppName,
+                        isPinned: isPinned,
+                        pinnedTitle: clip.pinnedTitle,
+                        typesData: Self.decodeTypesData(clip.typesArchive),
+                        fingerprint: fingerprint
+                    )
+                }
+                if shouldMigratePinned, needsSave {
+                    try save(context: container.viewContext)
+                    UserDefaults.standard.set(true, forKey: migrationKey)
+                } else if shouldMigratePinned {
+                    UserDefaults.standard.set(true, forKey: migrationKey)
+                }
+            } catch {
+                fetchError = error
             }
-            return ClipboardItem(
-                id: id,
-                createdAt: createdAt,
-                type: ClipboardItemType(rawValue: type) ?? .other,
-                textContent: clip.textContent,
-                rtfData: clip.rtfData,
-                imageData: clip.imageData,
-                urlString: clip.urlString,
-                fileURLs: clip.fileBookmarkData.flatMap { Self.resolveFileBookmarks($0) } ?? [],
-                sourceAppBundleId: clip.sourceAppBundleId,
-                sourceAppName: clip.sourceAppName,
-                isPinned: true,
-                pinnedTitle: clip.pinnedTitle,
-                typesData: Self.decodeTypesData(clip.typesArchive),
-                fingerprint: fingerprint
-            )
+        }
+
+        if let fetchError {
+            throw fetchError
+        }
+        return fetched
+    }
+
+    func upsert(_ item: ClipboardItem) throws {
+        var upsertError: Error?
+        container.viewContext.performAndWait {
+            let context = container.viewContext
+            let request = NSFetchRequest<PinnedClip>(entityName: "PinnedClip")
+            request.predicate = NSPredicate(format: "fingerprint == %@", item.fingerprint)
+            let existing = (try? context.fetch(request))?.first
+            let clip = existing ?? PinnedClip(context: context)
+
+            clip.id = item.id
+            clip.createdAt = item.createdAt
+            clip.type = item.type.rawValue
+            clip.textContent = item.textContent
+            clip.rtfData = item.rtfData
+            clip.imageData = item.imageData
+            clip.urlString = item.urlString
+            clip.fileBookmarkData = Self.archiveFileBookmarks(item.fileURLs)
+            clip.sourceAppBundleId = item.sourceAppBundleId
+            clip.sourceAppName = item.sourceAppName
+            clip.isPinned = item.isPinned
+            clip.pinnedTitle = item.pinnedTitle
+            clip.typesArchive = Self.encodeTypesData(item.typesData)
+            clip.fingerprint = item.fingerprint
+
+            do {
+                try save(context: context)
+            } catch {
+                upsertError = error
+            }
+        }
+        if let upsertError {
+            throw upsertError
         }
     }
 
-    func savePinned(_ item: ClipboardItem) {
-        let context = container.viewContext
-        let request = NSFetchRequest<PinnedClip>(entityName: "PinnedClip")
-        request.predicate = NSPredicate(format: "fingerprint == %@", item.fingerprint)
-        let existing = (try? context.fetch(request))?.first
-        let clip = existing ?? PinnedClip(context: context)
-
-        clip.id = item.id
-        clip.createdAt = item.createdAt
-        clip.type = item.type.rawValue
-        clip.textContent = item.textContent
-        clip.rtfData = item.rtfData
-        clip.imageData = item.imageData
-        clip.urlString = item.urlString
-        clip.fileBookmarkData = Self.archiveFileBookmarks(item.fileURLs)
-        clip.sourceAppBundleId = item.sourceAppBundleId
-        clip.sourceAppName = item.sourceAppName
-        clip.pinnedTitle = item.pinnedTitle
-        clip.typesArchive = Self.encodeTypesData(item.typesData)
-        clip.fingerprint = item.fingerprint
-
-        save(context: context)
-    }
-
-    func removePinned(fingerprint: String) {
-        let context = container.viewContext
-        let request = NSFetchRequest<PinnedClip>(entityName: "PinnedClip")
-        request.predicate = NSPredicate(format: "fingerprint == %@", fingerprint)
-        if let clip = try? context.fetch(request).first {
-            context.delete(clip)
-            save(context: context)
+    func remove(fingerprint: String) throws {
+        var removeError: Error?
+        container.viewContext.performAndWait {
+            let context = container.viewContext
+            let request = NSFetchRequest<PinnedClip>(entityName: "PinnedClip")
+            request.predicate = NSPredicate(format: "fingerprint == %@", fingerprint)
+            if let clip = try? context.fetch(request).first {
+                context.delete(clip)
+                do {
+                    try save(context: context)
+                } catch {
+                    removeError = error
+                }
+            }
+        }
+        if let removeError {
+            throw removeError
         }
     }
 
-    private func save(context: NSManagedObjectContext) {
+    private func save(context: NSManagedObjectContext) throws {
         guard context.hasChanges else { return }
         do {
             try context.save()
         } catch {
             NSLog("PinnedStore save error: \(error)")
+            throw error
         }
     }
 

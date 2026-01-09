@@ -10,6 +10,7 @@ struct SettingsView: View {
 
     @State private var showClearHistoryAlert = false
     @State private var showAppPicker = false
+    @State private var showSyncConfirmation = false
 
     var body: some View {
         ZStack {
@@ -88,6 +89,44 @@ struct SettingsView: View {
                                 .foregroundColor(Color(white: 0.5))
 
                             IgnoredAppsListView(settings: settings, showAppPicker: $showAppPicker)
+                        }
+                    }
+
+                    // Sync Section
+                    SettingsSection(title: "Sync") {
+                        SettingsToggleRow(
+                            title: "iCloud sync",
+                            subtitle: "Sync clipboard history across your Macs",
+                            isOn: $settings.iCloudSyncEnabled
+                        )
+
+                        HStack {
+                            Text("Sync your history now")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(white: 0.5))
+
+                            Spacer()
+
+                            Button {
+                                historyStore.syncNow()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if historyStore.syncState == .syncing {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    }
+                                    Text(historyStore.syncState == .syncing ? "Syncing..." : "Sync Now")
+                                }
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(!settings.iCloudSyncEnabled || historyStore.syncState == .syncing)
+                            .opacity(settings.iCloudSyncEnabled ? 1 : 0.5)
+                        }
+
+                        if case let .failed(message) = historyStore.syncState {
+                            Text("Sync failed: \(message)")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(red: 0.98, green: 0.45, blue: 0.4))
                         }
                     }
 
@@ -197,8 +236,8 @@ struct SettingsView: View {
 
                             Spacer()
 
-                            Button("View on GitHub") {
-                                if let url = URL(string: "https://github.com/iamngoni/Pastr") {
+                            Button("Visit Website") {
+                                if let url = URL(string: "https://pastr.iamngoni.dev") {
                                     NSWorkspace.shared.open(url)
                                 }
                             }
@@ -210,6 +249,29 @@ struct SettingsView: View {
                 }
                 .padding(32)
             }
+
+            if showSyncConfirmation {
+                HStack {
+                    Spacer()
+                    Text("Sync complete")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.7))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                }
+                .padding(.top, 18)
+                .padding(.trailing, 24)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.easeOut(duration: 0.2), value: showSyncConfirmation)
+            }
         }
         .frame(width: 480, height: 640)
         .alert("Clear History", isPresented: $showClearHistoryAlert) {
@@ -219,6 +281,20 @@ struct SettingsView: View {
             }
         } message: {
             Text("This will remove all non-pinned clipboard items. This action cannot be undone.")
+        }
+        .onChange(of: historyStore.syncState) { _, newValue in
+            switch newValue {
+            case .success:
+                showSyncConfirmation = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                    showSyncConfirmation = false
+                    historyStore.clearSyncState()
+                }
+            case .failed:
+                showSyncConfirmation = false
+            case .idle, .syncing:
+                break
+            }
         }
         .sheet(isPresented: $showAppPicker) {
             AppPickerView(settings: settings, isPresented: $showAppPicker)
