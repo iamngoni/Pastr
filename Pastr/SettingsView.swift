@@ -17,6 +17,8 @@ struct SettingsView: View {
     @State private var pendingBackupURL: URL?
     @State private var pendingRestoreURL: URL?
     @State private var backupAlertMessage: String?
+    @State private var isBackupWorking = false
+    @State private var backupWorkingMessage = "Working..."
 
     private let backupManager = BackupManager()
 
@@ -317,6 +319,29 @@ struct SettingsView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .animation(.easeOut(duration: 0.2), value: showSyncConfirmation)
             }
+
+            if isBackupWorking {
+                ZStack {
+                    Color.black.opacity(0.25)
+                        .ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .controlSize(.regular)
+                        Text(backupWorkingMessage)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.black.opacity(0.7))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            )
+                    )
+                }
+            }
         }
         .frame(width: 480, height: 640)
         .alert("Clear History", isPresented: $showClearHistoryAlert) {
@@ -420,32 +445,28 @@ struct SettingsView: View {
         }
         presentSavePanel(panel) { url in
             guard let url else { return }
-            do {
+            runBackupTask(message: "Exporting...") {
                 try backupManager.export(items: historyStore.items, to: url, format: format)
-                backupAlertMessage = "Export saved."
-            } catch {
-                backupAlertMessage = "Export failed: \(error.localizedDescription)"
+                return "Export saved."
             }
         }
     }
 
     private func performBackup(to url: URL, password: String?) {
-        do {
+        runBackupTask(message: "Creating backup...") {
             try backupManager.createBackup(items: historyStore.items, to: url, password: password)
-            backupAlertMessage = "Backup saved."
-        } catch {
-            backupAlertMessage = "Backup failed: \(error.localizedDescription)"
+            return "Backup saved."
         }
         clearPendingBackup()
     }
 
     private func performRestore(from url: URL, password: String?) {
-        do {
+        runBackupTask(message: "Restoring backup...") {
             let items = try backupManager.restoreBackup(from: url, password: password)
-            historyStore.replaceAll(with: items)
-            backupAlertMessage = "Backup restored."
-        } catch {
-            backupAlertMessage = "Restore failed: \(error.localizedDescription)"
+            DispatchQueue.main.async {
+                historyStore.replaceAll(with: items)
+            }
+            return "Backup restored."
         }
         clearPendingBackup()
     }
@@ -467,6 +488,25 @@ struct SettingsView: View {
         pendingBackupURL = nil
         pendingRestoreURL = nil
         showPasswordPrompt = false
+    }
+
+    private func runBackupTask(message: String, task: @escaping () throws -> String) {
+        backupWorkingMessage = message
+        isBackupWorking = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let successMessage = try task()
+                DispatchQueue.main.async {
+                    isBackupWorking = false
+                    backupAlertMessage = successMessage
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    isBackupWorking = false
+                    backupAlertMessage = "Operation failed: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 
     private func presentSavePanel(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
