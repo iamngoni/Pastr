@@ -6,8 +6,11 @@ final class PanelViewModel: ObservableObject {
     @Published var selectedIndex: Int = 0
     @Published var searchText: String = ""
     @Published var selectedItemIds: Set<UUID> = []
+    @Published private(set) var previewItem: ClipboardItem?
 
     private let historyStore: ClipboardHistoryStore
+    private var previewSource: PreviewSource?
+    private var hoverWorkItem: DispatchWorkItem?
 
     init(historyStore: ClipboardHistoryStore) {
         self.historyStore = historyStore
@@ -71,12 +74,18 @@ final class PanelViewModel: ObservableObject {
         guard !items.isEmpty else { return }
         selectedIndex = min(selectedIndex + 1, items.count - 1)
         selectedItemIds.removeAll()
+        if previewSource == .explicit {
+            previewItem = selectedItem
+        }
     }
 
     func selectPrevious() {
         guard !items.isEmpty else { return }
         selectedIndex = max(selectedIndex - 1, 0)
         selectedItemIds.removeAll()
+        if previewSource == .explicit {
+            previewItem = selectedItem
+        }
     }
 
     func selectItem(_ item: ClipboardItem) {
@@ -105,4 +114,47 @@ final class PanelViewModel: ObservableObject {
     func clearMultiSelection() {
         selectedItemIds.removeAll()
     }
+
+    func showPreview(_ item: ClipboardItem, source: PreviewSource) {
+        previewSource = source
+        previewItem = item
+    }
+
+    func clearPreview() {
+        previewSource = nil
+        previewItem = nil
+    }
+
+    func togglePreviewForSelected() {
+        guard let item = selectedItem else { return }
+        if previewSource == .explicit, previewItem?.id == item.id {
+            clearPreview()
+        } else {
+            showPreview(item, source: .explicit)
+        }
+    }
+
+    func hoverPreview(for item: ClipboardItem, isHovering: Bool) {
+        guard previewSource != .explicit else { return }
+
+        if isHovering {
+            hoverWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.showPreview(item, source: .hover)
+            }
+            hoverWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
+        } else {
+            hoverWorkItem?.cancel()
+            hoverWorkItem = nil
+            if previewSource == .hover, previewItem?.id == item.id {
+                clearPreview()
+            }
+        }
+    }
+}
+
+enum PreviewSource {
+    case hover
+    case explicit
 }

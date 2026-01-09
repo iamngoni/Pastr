@@ -5,4 +5,8 @@
 - Sync full clipboard history to iCloud (not just pinned items).
 - Added manual Sync Now with progress, success toast, and error feedback.
 - Enabled drag-and-drop of clipboard items into other apps.
+- Added quick preview on hover/space and a Preview context menu action.
+- Added backup/export tools with optional encryption and restore support.
+- Strengthened backup encryption key derivation (PBKDF2).
 - Updated Settings About link to the Pastr website.
+- Improved selected-card highlight visibility.

@@ -1,3 +1,4 @@
+import AppKit
 import Carbon.HIToolbox
 import SwiftUI
 
@@ -11,6 +12,13 @@ struct SettingsView: View {
     @State private var showClearHistoryAlert = false
     @State private var showAppPicker = false
     @State private var showSyncConfirmation = false
+    @State private var showPasswordPrompt = false
+    @State private var passwordPromptMode: PasswordPromptMode = .backup
+    @State private var pendingBackupURL: URL?
+    @State private var pendingRestoreURL: URL?
+    @State private var backupAlertMessage: String?
+
+    private let backupManager = BackupManager()
 
     var body: some View {
         ZStack {
@@ -181,6 +189,43 @@ struct SettingsView: View {
                         .padding(.top, 8)
                     }
 
+                    // Backup & Export Section
+                    SettingsSection(title: "Backup & Export") {
+                        SettingsToggleRow(
+                            title: "Encrypt backups",
+                            subtitle: "Protect backups with a password",
+                            isOn: $settings.encryptBackups
+                        )
+
+                        HStack(spacing: 12) {
+                            Button("Create Backup") {
+                                startBackup()
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+
+                            Button("Restore Backup") {
+                                startRestore()
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+
+                            Spacer()
+                        }
+
+                        HStack(spacing: 12) {
+                            Button("Export JSON") {
+                                export(format: .json)
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+
+                            Button("Export CSV") {
+                                export(format: .csv)
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+
+                            Spacer()
+                        }
+                    }
+
                     // Keyboard Shortcut Section
                     SettingsSection(title: "Keyboard Shortcut") {
                         HStack {
@@ -299,7 +344,208 @@ struct SettingsView: View {
         .sheet(isPresented: $showAppPicker) {
             AppPickerView(settings: settings, isPresented: $showAppPicker)
         }
+        .sheet(isPresented: $showPasswordPrompt) {
+            BackupPasswordPrompt(
+                mode: passwordPromptMode,
+                onCancel: {
+                    clearPendingBackup()
+                },
+                onConfirm: { password in
+                    handlePasswordConfirm(password)
+                }
+            )
+        }
+        .alert("Backup", isPresented: Binding(get: {
+            backupAlertMessage != nil
+        }, set: { newValue in
+            if !newValue {
+                backupAlertMessage = nil
+            }
+        })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(backupAlertMessage ?? "")
+        }
     }
+
+    private func startBackup() {
+        let panel = NSSavePanel()
+        panel.allowedFileTypes = ["pastrbackup"]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "Pastr Backup \(DateFormatter.backupNameFormatter.string(from: Date())).pastrbackup"
+        if panel.runModal() == .OK, let url = panel.url {
+            if settings.encryptBackups {
+                pendingBackupURL = url
+                passwordPromptMode = .backup
+                showPasswordPrompt = true
+            } else {
+                performBackup(to: url, password: nil)
+            }
+        }
+    }
+
+    private func startRestore() {
+        let panel = NSOpenPanel()
+        panel.allowedFileTypes = ["pastrbackup", "json"]
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                let data = try Data(contentsOf: url)
+                if backupManager.isEncryptedBackup(data) {
+                    pendingRestoreURL = url
+                    passwordPromptMode = .restore
+                    showPasswordPrompt = true
+                } else {
+                    performRestore(from: url, password: nil)
+                }
+            } catch {
+                backupAlertMessage = "Could not read backup: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func export(format: ExportFormat) {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        switch format {
+        case .json:
+            panel.allowedFileTypes = ["json"]
+            panel.nameFieldStringValue = "Pastr Export \(DateFormatter.backupNameFormatter.string(from: Date())).json"
+        case .csv:
+            panel.allowedFileTypes = ["csv"]
+            panel.nameFieldStringValue = "Pastr Export \(DateFormatter.backupNameFormatter.string(from: Date())).csv"
+        }
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try backupManager.export(items: historyStore.items, to: url, format: format)
+                backupAlertMessage = "Export saved."
+            } catch {
+                backupAlertMessage = "Export failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func performBackup(to url: URL, password: String?) {
+        do {
+            try backupManager.createBackup(items: historyStore.items, to: url, password: password)
+            backupAlertMessage = "Backup saved."
+        } catch {
+            backupAlertMessage = "Backup failed: \(error.localizedDescription)"
+        }
+        clearPendingBackup()
+    }
+
+    private func performRestore(from url: URL, password: String?) {
+        do {
+            let items = try backupManager.restoreBackup(from: url, password: password)
+            historyStore.replaceAll(with: items)
+            backupAlertMessage = "Backup restored."
+        } catch {
+            backupAlertMessage = "Restore failed: \(error.localizedDescription)"
+        }
+        clearPendingBackup()
+    }
+
+    private func handlePasswordConfirm(_ password: String) {
+        showPasswordPrompt = false
+        if let url = pendingBackupURL {
+            performBackup(to: url, password: password)
+            return
+        }
+        if let url = pendingRestoreURL {
+            performRestore(from: url, password: password)
+            return
+        }
+        clearPendingBackup()
+    }
+
+    private func clearPendingBackup() {
+        pendingBackupURL = nil
+        pendingRestoreURL = nil
+        showPasswordPrompt = false
+    }
+}
+
+private enum PasswordPromptMode {
+    case backup
+    case restore
+
+    var title: String {
+        switch self {
+        case .backup:
+            return "Encrypt Backup"
+        case .restore:
+            return "Decrypt Backup"
+        }
+    }
+
+    var requiresConfirmation: Bool {
+        switch self {
+        case .backup: return true
+        case .restore: return false
+        }
+    }
+}
+
+private struct BackupPasswordPrompt: View {
+    let mode: PasswordPromptMode
+    let onCancel: () -> Void
+    let onConfirm: (String) -> Void
+
+    @State private var password = ""
+    @State private var confirmPassword = ""
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(mode.title)
+                .font(.system(size: 16, weight: .semibold))
+
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+
+            if mode.requiresConfirmation {
+                SecureField("Confirm Password", text: $confirmPassword)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(red: 0.98, green: 0.45, blue: 0.4))
+            }
+
+            HStack {
+                Button("Cancel") {
+                    onCancel()
+                }
+                Spacer()
+                Button(mode == .backup ? "Encrypt" : "Unlock") {
+                    guard !password.isEmpty else {
+                        errorMessage = "Password is required."
+                        return
+                    }
+                    if mode.requiresConfirmation, password != confirmPassword {
+                        errorMessage = "Passwords do not match."
+                        return
+                    }
+                    onConfirm(password)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
+    }
+}
+
+private extension DateFormatter {
+    static let backupNameFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 }
 
 // MARK: - Ignored Apps List View
