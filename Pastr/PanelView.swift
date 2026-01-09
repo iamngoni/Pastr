@@ -115,6 +115,13 @@ struct PanelView: View {
                         )
                         .id(item.id)
                         .onDrag { item.itemProvider() }
+                        .onHover { hovering in
+                            viewModel.hoverPreview(for: item, isHovering: hovering)
+                        }
+                        .popover(isPresented: previewBinding(for: item)) {
+                            ClipboardPreviewView(item: item)
+                                .frame(width: 360, height: 260)
+                        }
                         .gesture(
                             TapGesture()
                                 .modifiers(.command)
@@ -150,6 +157,13 @@ struct PanelView: View {
 
     @ViewBuilder
     private func contextMenu(for item: ClipboardItem) -> some View {
+        Button {
+            viewModel.showPreview(item, source: .explicit)
+        } label: {
+            Label("Preview", systemImage: "eye")
+        }
+        .keyboardShortcut(.space, modifiers: [])
+
         // Paste action
         Button {
             onSelect(item)
@@ -254,6 +268,17 @@ struct PanelView: View {
         if let window = NSApp.keyWindow, let contentView = window.contentView {
             picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
         }
+    }
+
+    private func previewBinding(for item: ClipboardItem) -> Binding<Bool> {
+        Binding(
+            get: { viewModel.previewItem?.id == item.id },
+            set: { isPresented in
+                if !isPresented, viewModel.previewItem?.id == item.id {
+                    viewModel.clearPreview()
+                }
+            }
+        )
     }
 }
 
@@ -534,6 +559,129 @@ private struct LinkPreviewCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             linkService.fetchPreview(for: urlString)
+        }
+    }
+}
+
+// MARK: - Clipboard Preview
+
+private struct ClipboardPreviewView: View {
+    let item: ClipboardItem
+    @ObservedObject private var linkService = LinkPreviewService.shared
+
+    private var preview: LinkPreview? {
+        guard let urlString = item.urlString else { return nil }
+        return linkService.preview(for: urlString)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                if let icon = item.sourceAppIcon {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                        .cornerRadius(3)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.sourceAppName ?? "Unknown App")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(item.relativeTime)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Text(item.type.label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+
+            Divider()
+
+            Group {
+                switch item.type {
+                case .image:
+                    if let image = item.image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: 160)
+                            .cornerRadius(8)
+                    } else {
+                        Text("Image")
+                            .foregroundColor(.secondary)
+                    }
+                case .richText:
+                    ScrollView {
+                        if let attributed = item.attributedPreview {
+                            Text(attributed)
+                                .font(.system(size: 12))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            Text(item.previewText)
+                                .font(.system(size: 12))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                case .text, .other:
+                    ScrollView {
+                        if SyntaxHighlighter.isLikelyCode(item.previewText) {
+                            Text(SyntaxHighlighter.highlightedAttributedString(item.previewText))
+                                .font(.system(size: 12, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            Text(item.previewText)
+                                .font(.system(size: 12))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                case .link:
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let image = preview?.image {
+                            Image(nsImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 110)
+                                .clipped()
+                                .cornerRadius(8)
+                        }
+                        Text(preview?.title ?? item.previewText)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(2)
+                        if let urlString = item.urlString {
+                            Text(urlString)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                case .file:
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(item.fileURLs, id: \.self) { url in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(url.lastPathComponent)
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text(url.path)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .onAppear {
+            if let urlString = item.urlString {
+                linkService.fetchPreview(for: urlString)
+            }
         }
     }
 }

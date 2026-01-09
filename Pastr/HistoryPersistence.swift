@@ -16,24 +16,29 @@ final class HistoryPersistence {
 
     func load() -> [ClipboardItem] {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let records = try? decoder.decode([ClipboardItemRecord].self, from: data) else {
-            return []
-        }
-        return records.map { $0.toClipboardItem() }
+        return (try? decodeItems(from: data)) ?? []
     }
 
     func save(_ items: [ClipboardItem]) {
+        queue.async {
+            guard let data = try? self.encodeItems(items) else { return }
+            try? data.write(to: self.fileURL, options: .atomic)
+        }
+    }
+
+    func encodeItems(_ items: [ClipboardItem]) throws -> Data {
         let records = items.map { ClipboardItemRecord(from: $0) }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
+        return try encoder.encode(records)
+    }
 
-        queue.async {
-            guard let data = try? encoder.encode(records) else { return }
-            try? data.write(to: self.fileURL, options: .atomic)
-        }
+    func decodeItems(from data: Data) throws -> [ClipboardItem] {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let records = try decoder.decode([ClipboardItemRecord].self, from: data)
+        return records.map { $0.toClipboardItem() }
     }
 }
 

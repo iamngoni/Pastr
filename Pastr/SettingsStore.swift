@@ -66,6 +66,10 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(generateLinkPreviews, forKey: Keys.generateLinkPreviews) }
     }
 
+    @Published var encryptBackups: Bool {
+        didSet { defaults.set(encryptBackups, forKey: Keys.encryptBackups) }
+    }
+
     @Published var ignoreConfidentialContent: Bool {
         didSet { defaults.set(ignoreConfidentialContent, forKey: Keys.ignoreConfidentialContent) }
     }
@@ -119,6 +123,7 @@ final class SettingsStore: ObservableObject {
 
         let storedGenerateLinkPreviews = defaults.object(forKey: Keys.generateLinkPreviews)
         generateLinkPreviews = storedGenerateLinkPreviews == nil ? true : defaults.bool(forKey: Keys.generateLinkPreviews)
+        encryptBackups = defaults.bool(forKey: Keys.encryptBackups)
 
         let storedIgnoreConfidential = defaults.object(forKey: Keys.ignoreConfidentialContent)
         ignoreConfidentialContent = storedIgnoreConfidential == nil ? true : defaults.bool(forKey: Keys.ignoreConfidentialContent)
@@ -150,6 +155,7 @@ final class SettingsStore: ObservableObject {
         // Privacy
         static let showDuringScreenSharing = "showDuringScreenSharing"
         static let generateLinkPreviews = "generateLinkPreviews"
+        static let encryptBackups = "encryptBackups"
         static let ignoreConfidentialContent = "ignoreConfidentialContent"
         static let ignoreTransientContent = "ignoreTransientContent"
         static let ignoredAppBundleIds = "ignoredAppBundleIds"

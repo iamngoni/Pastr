@@ -137,6 +137,24 @@ final class PinnedStore {
         }
     }
 
+    func removeAll() throws {
+        var removeError: Error?
+        container.viewContext.performAndWait {
+            let context = container.viewContext
+            let request = NSFetchRequest<PinnedClip>(entityName: "PinnedClip")
+            do {
+                let results = try context.fetch(request)
+                results.forEach { context.delete($0) }
+                try save(context: context)
+            } catch {
+                removeError = error
+            }
+        }
+        if let removeError {
+            throw removeError
+        }
+    }
+
     private func save(context: NSManagedObjectContext) throws {
         guard context.hasChanges else { return }
         do {
