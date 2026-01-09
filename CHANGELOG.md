@@ -10,5 +10,6 @@
 - Strengthened backup encryption key derivation (PBKDF2).
 - Fixed export/backup dialogs to present reliably from the settings window.
 - Added Sentry crash reporting.
+- Registered Pastr backup file type and enabled user-selected file read/write for save panels.
 - Updated Settings About link to the Pastr website.
 - Improved selected-card highlight visibility.
