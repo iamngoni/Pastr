@@ -111,6 +111,15 @@ final class ClipboardHistoryStore: ObservableObject {
         persistence.save(items)
     }
 
+    func replaceAll(with newItems: [ClipboardItem]) {
+        items = newItems.sorted { $0.createdAt > $1.createdAt }
+        persistence.save(items)
+        if settings.iCloudSyncEnabled {
+            try? pinnedStore.removeAll()
+            syncAllToCloud()
+        }
+    }
+
     func syncAllToCloud() {
         guard settings.iCloudSyncEnabled else { return }
         for item in items {

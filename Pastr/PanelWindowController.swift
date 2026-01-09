@@ -199,6 +199,9 @@ final class PanelWindowController {
             case 124: // Right arrow
                 self.viewModel.selectNext()
                 return nil
+            case 49: // Space
+                self.viewModel.togglePreviewForSelected()
+                return nil
             case 36, 76: // Enter/Return
                 if let item = self.viewModel.selectedItem {
                     self.onSelect(item)
