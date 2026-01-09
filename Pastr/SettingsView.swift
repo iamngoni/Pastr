@@ -11,7 +11,6 @@ struct SettingsView: View {
 
     @State private var showClearHistoryAlert = false
     @State private var showAppPicker = false
-    @State private var showSyncConfirmation = false
     @State private var showPasswordPrompt = false
     @State private var passwordPromptMode: PasswordPromptMode = .backup
     @State private var pendingBackupURL: URL?
@@ -297,28 +296,6 @@ struct SettingsView: View {
                 .padding(32)
             }
 
-            if showSyncConfirmation {
-                HStack {
-                    Spacer()
-                    Text("Sync complete")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                        .background(
-                            Capsule()
-                                .fill(Color.black.opacity(0.7))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                                )
-                        )
-                }
-                .padding(.top, 18)
-                .padding(.trailing, 24)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.easeOut(duration: 0.2), value: showSyncConfirmation)
-            }
 
             if isBackupWorking {
                 ZStack {
@@ -355,13 +332,10 @@ struct SettingsView: View {
         .onChange(of: historyStore.syncState) { _, newValue in
             switch newValue {
             case .success:
-                showSyncConfirmation = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                    showSyncConfirmation = false
-                    historyStore.clearSyncState()
-                }
+                backupAlertMessage = "Sync complete."
+                historyStore.clearSyncState()
             case .failed:
-                showSyncConfirmation = false
+                break
             case .idle, .syncing:
                 break
             }
