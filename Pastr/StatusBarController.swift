@@ -66,6 +66,10 @@ final class StatusBarController {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        let checkUpdatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        checkUpdatesItem.target = self
+        menu.addItem(checkUpdatesItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "Quit Pastr", action: #selector(quitApp), keyEquivalent: "q")
@@ -83,6 +87,12 @@ final class StatusBarController {
 
     @objc private func openSettings() {
         onOpenSettings()
+    }
+
+    @objc private func checkForUpdates() {
+        Task {
+            await UpdateChecker.shared.checkForUpdates(silent: false)
+        }
     }
 
     @objc private func quitApp() {

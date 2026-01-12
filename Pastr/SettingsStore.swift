@@ -86,6 +86,10 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(ignoredAppBundleIds, forKey: Keys.ignoredAppBundleIds) }
     }
 
+    @Published var checkForUpdatesAutomatically: Bool {
+        didSet { defaults.set(checkForUpdatesAutomatically, forKey: Keys.checkForUpdatesAutomatically) }
+    }
+
     private let defaults = UserDefaults.standard
 
     private init() {
@@ -143,6 +147,10 @@ final class SettingsStore: ObservableObject {
             "com.apple.keychainaccess",
             "com.apple.Passwords"
         ]
+
+        // Check for updates automatically - default to true
+        let storedCheckUpdates = defaults.object(forKey: Keys.checkForUpdatesAutomatically)
+        checkForUpdatesAutomatically = storedCheckUpdates == nil ? true : defaults.bool(forKey: Keys.checkForUpdatesAutomatically)
     }
 
     private enum Keys {
@@ -166,6 +174,7 @@ final class SettingsStore: ObservableObject {
         static let ignoreConfidentialContent = "ignoreConfidentialContent"
         static let ignoreTransientContent = "ignoreTransientContent"
         static let ignoredAppBundleIds = "ignoredAppBundleIds"
+        static let checkForUpdatesAutomatically = "checkForUpdatesAutomatically"
     }
 
     // MARK: - Ignored Apps Management
