@@ -88,6 +88,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !settingsStore.hasCompletedOnboarding {
             showOnboarding()
         }
+
+        // Check for updates on launch if enabled
+        if settingsStore.checkForUpdatesAutomatically {
+            Task {
+                await UpdateChecker.shared.checkForUpdates(silent: true)
+            }
+        }
     }
 
     private func bindSettings() {
