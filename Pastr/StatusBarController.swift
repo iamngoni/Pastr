@@ -62,7 +62,7 @@ final class StatusBarController {
 
         menu.addItem(NSMenuItem.separator())
 
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
         settingsItem.target = self
         menu.addItem(settingsItem)
 
