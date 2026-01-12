@@ -296,7 +296,7 @@ struct SettingsView: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(Color(white: 0.85))
 
-                                Text("Version 1.1")
+                                Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
                                     .font(.system(size: 11))
                                     .foregroundColor(Color(white: 0.5))
                             }
