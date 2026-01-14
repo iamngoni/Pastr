@@ -94,7 +94,7 @@ final class SettingsStore: ObservableObject {
 
     private init() {
         let storedMaxItems = defaults.integer(forKey: Keys.historyMaxItems)
-        historyMaxItems = storedMaxItems == 0 ? 100 : storedMaxItems
+        historyMaxItems = storedMaxItems == 0 ? 5000 : storedMaxItems
 
         let storedMaxDays = defaults.integer(forKey: Keys.historyMaxDays)
         historyMaxDays = storedMaxDays == 0 ? 30 : storedMaxDays

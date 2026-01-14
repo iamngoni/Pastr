@@ -1021,14 +1021,17 @@ struct HistoryDurationPicker: View {
 // MARK: - History Max Items Picker
 
 enum HistoryMaxItems: Int, CaseIterable {
-    case fifty = 50
-    case hundred = 100
-    case twoHundred = 200
     case fiveHundred = 500
     case thousand = 1000
+    case twoThousand = 2000
+    case fiveThousand = 5000
+    case tenThousand = 10000
 
     var label: String {
-        "\(rawValue)"
+        if rawValue >= 1000 {
+            return "\(rawValue / 1000)k"
+        }
+        return "\(rawValue)"
     }
 }
 
@@ -1036,7 +1039,7 @@ struct HistoryMaxItemsPicker: View {
     @Binding var selectedMaxItems: Int
 
     private var selectedOption: HistoryMaxItems {
-        HistoryMaxItems.allCases.first { $0.rawValue == selectedMaxItems } ?? .hundred
+        HistoryMaxItems.allCases.first { $0.rawValue == selectedMaxItems } ?? .fiveThousand
     }
 
     var body: some View {
