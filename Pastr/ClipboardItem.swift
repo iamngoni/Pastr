@@ -52,13 +52,7 @@ struct ClipboardItem: Identifiable, Hashable {
 
     var attributedPreview: AttributedString? {
         guard let rtfData else { return nil }
-        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-            .documentType: NSAttributedString.DocumentType.rtf
-        ]
-        guard let nsAttributed = try? NSAttributedString(data: rtfData, options: options, documentAttributes: nil) else {
-            return nil
-        }
-        return AttributedString(nsAttributed)
+        return AttributedStringCache.shared.attributedString(for: fingerprint, rtfData: rtfData)
     }
 
     var image: NSImage? {

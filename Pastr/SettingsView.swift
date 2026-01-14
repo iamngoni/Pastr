@@ -197,6 +197,26 @@ struct SettingsView: View {
                             )
                         }
 
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Maximum items")
+                                .font(.system(size: 13))
+                                .foregroundColor(Color(white: 0.7))
+
+                            HistoryMaxItemsPicker(selectedMaxItems: $settings.historyMaxItems)
+
+                            if historyStore.isHistoryLarge {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.system(size: 11))
+                                    Text("Large history (\(historyStore.items.count) items) may impact performance")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.orange)
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+
                         HStack {
                             Spacer()
                             Button("Clear History") {
@@ -996,6 +1016,64 @@ struct HistoryDurationPicker: View {
                             RoundedRectangle(cornerRadius: 6)
                                 .fill(
                                     selectedDuration == duration
+                                        ? Color(red: 0.04, green: 0.52, blue: 1) : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.08))
+        )
+    }
+}
+
+// MARK: - History Max Items Picker
+
+enum HistoryMaxItems: Int, CaseIterable {
+    case fiveHundred = 500
+    case thousand = 1000
+    case fiveThousand = 5000
+    case tenThousand = 10000
+    case unlimited = 0 // 0 represents unlimited
+
+    var label: String {
+        switch self {
+        case .unlimited:
+            return "Unlimited"
+        default:
+            if rawValue >= 1000 {
+                return "\(rawValue / 1000)k"
+            }
+            return "\(rawValue)"
+        }
+    }
+}
+
+struct HistoryMaxItemsPicker: View {
+    @Binding var selectedMaxItems: Int
+
+    private var selectedOption: HistoryMaxItems {
+        HistoryMaxItems.allCases.first { $0.rawValue == selectedMaxItems } ?? .unlimited
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(HistoryMaxItems.allCases, id: \.self) { option in
+                Button {
+                    selectedMaxItems = option.rawValue
+                } label: {
+                    Text(option.label)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(selectedOption == option ? .white : Color(white: 0.5))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(
+                                    selectedOption == option
                                         ? Color(red: 0.04, green: 0.52, blue: 1) : Color.clear)
                         )
                 }

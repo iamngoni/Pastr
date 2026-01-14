@@ -93,8 +93,12 @@ final class SettingsStore: ObservableObject {
     private let defaults = UserDefaults.standard
 
     private init() {
-        let storedMaxItems = defaults.integer(forKey: Keys.historyMaxItems)
-        historyMaxItems = storedMaxItems == 0 ? 100 : storedMaxItems
+        // 0 means unlimited, so we need to check if key exists to distinguish "not set" from "unlimited"
+        if defaults.object(forKey: Keys.historyMaxItems) != nil {
+            historyMaxItems = defaults.integer(forKey: Keys.historyMaxItems)
+        } else {
+            historyMaxItems = 0 // Default to unlimited
+        }
 
         let storedMaxDays = defaults.integer(forKey: Keys.historyMaxDays)
         historyMaxDays = storedMaxDays == 0 ? 30 : storedMaxDays
