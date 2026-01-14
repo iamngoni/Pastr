@@ -7,6 +7,7 @@
 - Fixed app hang when playing sounds by moving audio playback to background thread.
 - Fixed app hang during clipboard monitoring by moving pasteboard polling to background thread.
 - Fixed app hang when loading app icons by adding async icon cache.
+- Fixed app hang during rich text preview by caching parsed AttributedString objects.
 - Version number in Settings now displays dynamically from the app bundle.
 
 ## 2026-01-09
