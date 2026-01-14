@@ -197,6 +197,14 @@ struct SettingsView: View {
                             )
                         }
 
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Maximum items")
+                                .font(.system(size: 13))
+                                .foregroundColor(Color(white: 0.7))
+
+                            HistoryMaxItemsPicker(selectedMaxItems: $settings.historyMaxItems)
+                        }
+
                         HStack {
                             Spacer()
                             Button("Clear History") {
@@ -996,6 +1004,56 @@ struct HistoryDurationPicker: View {
                             RoundedRectangle(cornerRadius: 6)
                                 .fill(
                                     selectedDuration == duration
+                                        ? Color(red: 0.04, green: 0.52, blue: 1) : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.08))
+        )
+    }
+}
+
+// MARK: - History Max Items Picker
+
+enum HistoryMaxItems: Int, CaseIterable {
+    case fifty = 50
+    case hundred = 100
+    case twoHundred = 200
+    case fiveHundred = 500
+    case thousand = 1000
+
+    var label: String {
+        "\(rawValue)"
+    }
+}
+
+struct HistoryMaxItemsPicker: View {
+    @Binding var selectedMaxItems: Int
+
+    private var selectedOption: HistoryMaxItems {
+        HistoryMaxItems.allCases.first { $0.rawValue == selectedMaxItems } ?? .hundred
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(HistoryMaxItems.allCases, id: \.self) { option in
+                Button {
+                    selectedMaxItems = option.rawValue
+                } label: {
+                    Text(option.label)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(selectedOption == option ? .white : Color(white: 0.5))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(
+                                    selectedOption == option
                                         ? Color(red: 0.04, green: 0.52, blue: 1) : Color.clear)
                         )
                 }
