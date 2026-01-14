@@ -64,11 +64,14 @@ final class StatusBarController {
 
         let settingsItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: "")
         settingsItem.target = self
-        settingsItem.image = nil
         menu.addItem(settingsItem)
 
-        let checkUpdatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        let checkUpdatesItem = NSMenuItem(title: "Check for Updates", action: #selector(checkForUpdates), keyEquivalent: "")
         checkUpdatesItem.target = self
+        checkUpdatesItem.image = NSImage(
+            systemSymbolName: "arrow.triangle.2.circlepath",
+            accessibilityDescription: "Check for Updates"
+        )
         menu.addItem(checkUpdatesItem)
 
         menu.addItem(NSMenuItem.separator())
