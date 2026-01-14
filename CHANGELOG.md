@@ -4,6 +4,8 @@
 - Added "Check for Updates" menu item and automatic update checking on launch.
 - Added toggle in Settings to enable/disable automatic update checks.
 - Fixed app hang when playing sounds by moving audio playback to background thread.
+- Fixed app hang during clipboard monitoring by moving pasteboard polling to background thread.
+- Fixed app hang when loading app icons by adding async icon cache.
 - Version number in Settings now displays dynamically from the app bundle.
 
 ## 2026-01-09

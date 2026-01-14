@@ -5,7 +5,8 @@ final class ClipboardMonitor {
     private let settingsStore = SettingsStore.shared
     private let pasteboard = NSPasteboard.general
     private var changeCount: Int
-    private var timer: Timer?
+    private var timer: DispatchSourceTimer?
+    private let monitorQueue = DispatchQueue(label: "com.pastr.clipboard-monitor", qos: .userInitiated)
 
     // Pasteboard types that indicate confidential content
     private static let confidentialTypes: [NSPasteboard.PasteboardType] = [
@@ -28,13 +29,17 @@ final class ClipboardMonitor {
 
     func start() {
         stop()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
+        let timer = DispatchSource.makeTimerSource(queue: monitorQueue)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(450))
+        timer.setEventHandler { [weak self] in
             self?.pollPasteboard()
         }
+        timer.resume()
+        self.timer = timer
     }
 
     func stop() {
-        timer?.invalidate()
+        timer?.cancel()
         timer = nil
     }
 
@@ -105,7 +110,9 @@ final class ClipboardMonitor {
             sourceName: appName
         )
 
-        historyStore.add(item)
+        DispatchQueue.main.async { [weak self] in
+            self?.historyStore.add(item)
+        }
     }
 
     private func isFromUniversalClipboard(_ item: NSPasteboardItem) -> Bool {

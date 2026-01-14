@@ -67,11 +67,16 @@ struct ClipboardItem: Identifiable, Hashable {
     }
 
     var sourceAppIcon: NSImage? {
-        guard let bundleId = sourceAppBundleId,
-              let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
-            return nil
+        guard let bundleId = sourceAppBundleId else { return nil }
+        return AppIconCache.shared.cachedIcon(for: bundleId)
+    }
+
+    func loadSourceAppIconAsync(completion: @escaping (NSImage?) -> Void) {
+        guard let bundleId = sourceAppBundleId else {
+            completion(nil)
+            return
         }
-        return NSWorkspace.shared.icon(forFile: appURL.path)
+        AppIconCache.shared.icon(for: bundleId, completion: completion)
     }
 
     func write(to pasteboard: NSPasteboard) {
