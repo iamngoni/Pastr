@@ -4,8 +4,16 @@ import Combine
 final class ClipboardHistoryStore: ObservableObject {
     static let shared = ClipboardHistoryStore()
 
+    /// Threshold at which we warn users about potential performance impact
+    static let performanceWarningThreshold = 15000
+
     @Published private(set) var items: [ClipboardItem] = []
     @Published private(set) var syncState: SyncState = .idle
+
+    /// Returns true if history size may impact performance
+    var isHistoryLarge: Bool {
+        items.count >= Self.performanceWarningThreshold
+    }
 
     private let settings = SettingsStore.shared
     private let persistence = HistoryPersistence()
@@ -167,7 +175,8 @@ final class ClipboardHistoryStore: ObservableObject {
                 items.removeAll { !$0.isPinned && $0.createdAt < cutoff }
             }
 
-            if items.count > settings.historyMaxItems {
+            // Only prune by item count if a limit is set (0 = unlimited)
+            if settings.historyMaxItems > 0 && items.count > settings.historyMaxItems {
                 let pinnedCount = items.filter { $0.isPinned }.count
                 let allowedUnpinned = max(settings.historyMaxItems - pinnedCount, 0)
                 var trimmed: [ClipboardItem] = []

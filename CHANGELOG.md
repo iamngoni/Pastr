@@ -3,7 +3,8 @@
 ## v1.2 (2026-01-14)
 - Added "Check for Updates" menu item and automatic update checking on launch.
 - Added toggle in Settings to enable/disable automatic update checks.
-- Added "Maximum items" setting in History section (500, 1k, 2k, 5k, 10k). Default is 5000.
+- Added "Maximum items" setting in History section (500, 1k, 5k, 10k, Unlimited). Default is Unlimited.
+- Added performance warning when history exceeds 15,000 items.
 - Fixed app hang when playing sounds by moving audio playback to background thread.
 - Fixed app hang during clipboard monitoring by moving pasteboard polling to background thread.
 - Fixed app hang when loading app icons by adding async icon cache.

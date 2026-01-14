@@ -203,6 +203,18 @@ struct SettingsView: View {
                                 .foregroundColor(Color(white: 0.7))
 
                             HistoryMaxItemsPicker(selectedMaxItems: $settings.historyMaxItems)
+
+                            if historyStore.isHistoryLarge {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.system(size: 11))
+                                    Text("Large history (\(historyStore.items.count) items) may impact performance")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.orange)
+                                }
+                                .padding(.top, 4)
+                            }
                         }
 
                         HStack {
@@ -1023,15 +1035,20 @@ struct HistoryDurationPicker: View {
 enum HistoryMaxItems: Int, CaseIterable {
     case fiveHundred = 500
     case thousand = 1000
-    case twoThousand = 2000
     case fiveThousand = 5000
     case tenThousand = 10000
+    case unlimited = 0 // 0 represents unlimited
 
     var label: String {
-        if rawValue >= 1000 {
-            return "\(rawValue / 1000)k"
+        switch self {
+        case .unlimited:
+            return "Unlimited"
+        default:
+            if rawValue >= 1000 {
+                return "\(rawValue / 1000)k"
+            }
+            return "\(rawValue)"
         }
-        return "\(rawValue)"
     }
 }
 
@@ -1039,7 +1056,7 @@ struct HistoryMaxItemsPicker: View {
     @Binding var selectedMaxItems: Int
 
     private var selectedOption: HistoryMaxItems {
-        HistoryMaxItems.allCases.first { $0.rawValue == selectedMaxItems } ?? .fiveThousand
+        HistoryMaxItems.allCases.first { $0.rawValue == selectedMaxItems } ?? .unlimited
     }
 
     var body: some View {
