@@ -2,9 +2,13 @@ import Combine
 import Foundation
 
 final class PanelViewModel: ObservableObject {
-    @Published var selectedSection: PanelSection = .history
+    @Published var selectedSection: PanelSection = .history {
+        didSet { invalidateFilteredItems() }
+    }
     @Published var selectedIndex: Int = 0
-    @Published var searchText: String = ""
+    @Published var searchText: String = "" {
+        didSet { invalidateFilteredItems() }
+    }
     @Published var selectedItemIds: Set<UUID> = []
     @Published private(set) var previewItem: ClipboardItem?
 
@@ -12,33 +16,67 @@ final class PanelViewModel: ObservableObject {
     private let settings = SettingsStore.shared
     private var previewSource: PreviewSource?
     private var hoverWorkItem: DispatchWorkItem?
+    private var cancellables = Set<AnyCancellable>()
+
+    /// Cached filtered items to avoid recomputing on every access during layout
+    private var cachedFilteredItems: [ClipboardItem]?
+    private var cachedSearchText: String = ""
+    private var cachedSection: PanelSection = .history
 
     init(historyStore: ClipboardHistoryStore) {
         self.historyStore = historyStore
+        // Invalidate cache when history changes
+        historyStore.$items
+            .sink { [weak self] _ in
+                self?.invalidateFilteredItems()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func invalidateFilteredItems() {
+        cachedFilteredItems = nil
     }
 
     var items: [ClipboardItem] {
-        let baseItems = historyStore.items(for: selectedSection)
-        guard !searchText.isEmpty else { return baseItems }
-        let query = searchText.lowercased()
-        return baseItems.filter { item in
-            if let text = item.textContent?.lowercased(), text.contains(query) {
-                return true
-            }
-            if let url = item.urlString?.lowercased(), url.contains(query) {
-                return true
-            }
-            if let title = item.pinnedTitle?.lowercased(), title.contains(query) {
-                return true
-            }
-            if let appName = item.sourceAppName?.lowercased(), appName.contains(query) {
-                return true
-            }
-            if item.fileURLs.contains(where: { $0.lastPathComponent.lowercased().contains(query) }) {
-                return true
-            }
-            return false
+        // Return cached results if valid
+        if let cached = cachedFilteredItems,
+           cachedSearchText == searchText,
+           cachedSection == selectedSection {
+            return cached
         }
+
+        // Compute and cache
+        let baseItems = historyStore.items(for: selectedSection)
+        let result: [ClipboardItem]
+
+        if searchText.isEmpty {
+            result = baseItems
+        } else {
+            let query = searchText.lowercased()
+            result = baseItems.filter { item in
+                if let text = item.textContent?.lowercased(), text.contains(query) {
+                    return true
+                }
+                if let url = item.urlString?.lowercased(), url.contains(query) {
+                    return true
+                }
+                if let title = item.pinnedTitle?.lowercased(), title.contains(query) {
+                    return true
+                }
+                if let appName = item.sourceAppName?.lowercased(), appName.contains(query) {
+                    return true
+                }
+                if item.fileURLs.contains(where: { $0.lastPathComponent.lowercased().contains(query) }) {
+                    return true
+                }
+                return false
+            }
+        }
+
+        cachedFilteredItems = result
+        cachedSearchText = searchText
+        cachedSection = selectedSection
+        return result
     }
 
     var selectedItem: ClipboardItem? {

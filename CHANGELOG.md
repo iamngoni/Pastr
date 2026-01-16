@@ -9,6 +9,7 @@
 - Fixed app hang during clipboard monitoring by moving pasteboard polling to background thread.
 - Fixed app hang when loading app icons by adding async icon cache.
 - Fixed app hang during rich text preview by caching parsed AttributedString objects.
+- Fixed app hang during search filtering by caching filtered results.
 - Version number in Settings now displays dynamically from the app bundle.
 
 ## 2026-01-09
