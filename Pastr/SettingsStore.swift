@@ -1,3 +1,4 @@
+import AppKit
 import Carbon
 import Combine
 import Foundation
@@ -28,6 +29,22 @@ final class SettingsStore: ObservableObject {
 
     @Published var hotKeyModifiers: UInt32 {
         didSet { defaults.set(Int(hotKeyModifiers), forKey: Keys.hotKeyModifiers) }
+    }
+
+    @Published var queueModeKeyCode: UInt32 {
+        didSet { defaults.set(Int(queueModeKeyCode), forKey: Keys.queueModeKeyCode) }
+    }
+
+    @Published var queueModeModifiers: UInt32 {
+        didSet { defaults.set(Int(queueModeModifiers), forKey: Keys.queueModeModifiers) }
+    }
+
+    @Published var hotCorner: HotCornerMonitor.Corner {
+        didSet { defaults.set(hotCorner.rawValue, forKey: Keys.hotCorner) }
+    }
+
+    @Published var hotCornerDelay: TimeInterval {
+        didSet { defaults.set(hotCornerDelay, forKey: Keys.hotCornerDelay) }
     }
 
     @Published var hasCompletedOnboarding: Bool {
@@ -90,6 +107,10 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(checkForUpdatesAutomatically, forKey: Keys.checkForUpdatesAutomatically) }
     }
 
+    @Published var displaySize: DisplaySize {
+        didSet { defaults.set(displaySize.rawValue, forKey: Keys.displaySize) }
+    }
+
     private let defaults = UserDefaults.standard
 
     private init() {
@@ -113,6 +134,24 @@ final class SettingsStore: ObservableObject {
 
         let storedModifiers = defaults.integer(forKey: Keys.hotKeyModifiers)
         hotKeyModifiers = storedModifiers == 0 ? UInt32(cmdKey) : UInt32(storedModifiers)
+
+        // Queue mode hotkey defaults to Cmd+Shift+B
+        let storedQueueKeyCode = defaults.integer(forKey: Keys.queueModeKeyCode)
+        queueModeKeyCode = storedQueueKeyCode == 0 ? UInt32(kVK_ANSI_B) : UInt32(storedQueueKeyCode)
+
+        let storedQueueModifiers = defaults.integer(forKey: Keys.queueModeModifiers)
+        queueModeModifiers = storedQueueModifiers == 0 ? UInt32(cmdKey | shiftKey) : UInt32(storedQueueModifiers)
+
+        // Hot corner settings
+        if let storedHotCorner = defaults.string(forKey: Keys.hotCorner),
+           let corner = HotCornerMonitor.Corner(rawValue: storedHotCorner) {
+            hotCorner = corner
+        } else {
+            hotCorner = .disabled
+        }
+
+        let storedHotCornerDelay = defaults.double(forKey: Keys.hotCornerDelay)
+        hotCornerDelay = storedHotCornerDelay == 0 ? 0.3 : storedHotCornerDelay
 
         hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)
 
@@ -155,6 +194,14 @@ final class SettingsStore: ObservableObject {
         // Check for updates automatically - default to true
         let storedCheckUpdates = defaults.object(forKey: Keys.checkForUpdatesAutomatically)
         checkForUpdatesAutomatically = storedCheckUpdates == nil ? true : defaults.bool(forKey: Keys.checkForUpdatesAutomatically)
+
+        // Display size - default to auto (detects based on screen)
+        if let storedDisplaySize = defaults.string(forKey: Keys.displaySize),
+           let size = DisplaySize(rawValue: storedDisplaySize) {
+            displaySize = size
+        } else {
+            displaySize = .auto
+        }
     }
 
     private enum Keys {
@@ -164,6 +211,10 @@ final class SettingsStore: ObservableObject {
         static let pinLimit = "pinLimit"
         static let hotKeyKeyCode = "hotKeyKeyCode"
         static let hotKeyModifiers = "hotKeyModifiers"
+        static let queueModeKeyCode = "queueModeKeyCode"
+        static let queueModeModifiers = "queueModeModifiers"
+        static let hotCorner = "hotCorner"
+        static let hotCornerDelay = "hotCornerDelay"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let iCloudSyncEnabled = "iCloudSyncEnabled"
         static let launchAtLogin = "launchAtLogin"
@@ -179,6 +230,7 @@ final class SettingsStore: ObservableObject {
         static let ignoreTransientContent = "ignoreTransientContent"
         static let ignoredAppBundleIds = "ignoredAppBundleIds"
         static let checkForUpdatesAutomatically = "checkForUpdatesAutomatically"
+        static let displaySize = "displaySize"
     }
 
     // MARK: - Ignored Apps Management
@@ -215,6 +267,105 @@ enum LaunchAtLogin {
         } else {
             let identifier = "com.iamngoni.Pastr.LaunchHelper" as CFString
             SMLoginItemSetEnabled(identifier, enabled)
+        }
+    }
+}
+
+enum DisplaySize: String, CaseIterable, Identifiable {
+    case auto = "auto"
+    case compact = "compact"
+    case regular = "regular"
+    case large = "large"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .auto: return "Auto (detect screen)"
+        case .compact: return "Compact"
+        case .regular: return "Regular"
+        case .large: return "Large"
+        }
+    }
+
+    /// Scale factor for UI elements
+    var scaleFactor: CGFloat {
+        switch self {
+        case .auto: return DisplaySize.autoDetectedSize.scaleFactor
+        case .compact: return 0.85
+        case .regular: return 1.0
+        case .large: return 1.25
+        }
+    }
+
+    /// Card width in points
+    var cardWidth: CGFloat {
+        switch self {
+        case .auto: return DisplaySize.autoDetectedSize.cardWidth
+        case .compact: return 200
+        case .regular: return 240
+        case .large: return 300
+        }
+    }
+
+    /// Card height in points
+    var cardHeight: CGFloat {
+        switch self {
+        case .auto: return DisplaySize.autoDetectedSize.cardHeight
+        case .compact: return 150
+        case .regular: return 180
+        case .large: return 225
+        }
+    }
+
+    /// Panel width in points
+    var panelWidth: CGFloat {
+        switch self {
+        case .auto: return DisplaySize.autoDetectedSize.panelWidth
+        case .compact: return 640
+        case .regular: return 780
+        case .large: return 960
+        }
+    }
+
+    /// Panel height in points
+    var panelHeight: CGFloat {
+        switch self {
+        case .auto: return DisplaySize.autoDetectedSize.panelHeight
+        case .compact: return 420
+        case .regular: return 500
+        case .large: return 620
+        }
+    }
+
+    /// Base font size for card content
+    var baseFontSize: CGFloat {
+        switch self {
+        case .auto: return DisplaySize.autoDetectedSize.baseFontSize
+        case .compact: return 10
+        case .regular: return 12
+        case .large: return 14
+        }
+    }
+
+    /// Auto-detect appropriate size based on main screen
+    static var autoDetectedSize: DisplaySize {
+        guard let screen = NSScreen.main else { return .regular }
+        let width = screen.frame.width
+        let scaleFactor = screen.backingScaleFactor
+
+        // Consider both resolution and scale factor
+        // High-DPI displays (Retina) have more physical pixels
+        let effectiveWidth = width * scaleFactor
+
+        if effectiveWidth >= 5120 { // 5K display or larger
+            return .large
+        } else if effectiveWidth >= 3840 { // 4K display
+            return .large
+        } else if effectiveWidth >= 2560 { // QHD or Retina MacBook
+            return .regular
+        } else {
+            return .compact
         }
     }
 }

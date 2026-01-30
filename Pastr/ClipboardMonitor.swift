@@ -3,6 +3,7 @@ import AppKit
 final class ClipboardMonitor {
     private let historyStore: ClipboardHistoryStore
     private let settingsStore = SettingsStore.shared
+    private let pasteQueue = PasteQueue.shared
     private let pasteboard = NSPasteboard.general
     private var changeCount: Int
     private var timer: DispatchSourceTimer?
@@ -111,7 +112,13 @@ final class ClipboardMonitor {
         )
 
         DispatchQueue.main.async { [weak self] in
-            self?.historyStore.add(item)
+            guard let self else { return }
+            // Add to history
+            self.historyStore.add(item)
+            // Also add to paste queue if queue mode is active
+            if self.pasteQueue.isActive {
+                self.pasteQueue.enqueue(item)
+            }
         }
     }
 

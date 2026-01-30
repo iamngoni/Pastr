@@ -18,11 +18,19 @@ final class ClipboardHistoryStore: ObservableObject {
     private let settings = SettingsStore.shared
     private let persistence = HistoryPersistence()
     private let pinnedStore = PinnedStore.shared
+    private let collectionStore = CollectionStore.shared
     private var cancellables = Set<AnyCancellable>()
 
     init() {
         items = persistence.load()
         bindSettings()
+        migrateToCollections()
+    }
+
+    /// Migrate from isPinned to collections system
+    private func migrateToCollections() {
+        let pinnedFingerprints = items.filter { $0.isPinned }.map { $0.fingerprint }
+        collectionStore.migrateFromPinnedIfNeeded(pinnedFingerprints: pinnedFingerprints)
     }
 
     func add(_ item: ClipboardItem) {
@@ -52,8 +60,32 @@ final class ClipboardHistoryStore: ObservableObject {
         case .history:
             return items
         case .pinned:
-            return items.filter { $0.isPinned }
+            // Legacy support: items that are pinned OR in any collection
+            return items.filter { $0.isPinned || collectionStore.isItemInAnyCollection(fingerprint: $0.fingerprint) }
+        case .collection(let collectionId):
+            guard let collection = collectionStore.collections.first(where: { $0.id == collectionId }) else {
+                return []
+            }
+            return items.filter { collection.contains(fingerprint: $0.fingerprint) }
+        case .tag(let tagId):
+            let tagStore = TagStore.shared
+            let itemsWithTag = tagStore.itemsWithTag(tagId)
+            return items.filter { itemsWithTag.contains($0.fingerprint) }
         }
+    }
+
+    func items(for collection: Collection) -> [ClipboardItem] {
+        items.filter { collection.contains(fingerprint: $0.fingerprint) }
+    }
+
+    /// Check if an item is in any collection
+    func isInAnyCollection(_ item: ClipboardItem) -> Bool {
+        collectionStore.isItemInAnyCollection(fingerprint: item.fingerprint)
+    }
+
+    /// Get collections containing an item
+    func collections(for item: ClipboardItem) -> [Collection] {
+        collectionStore.collections(containing: item.fingerprint)
     }
 
     func togglePin(for item: ClipboardItem) {
@@ -76,6 +108,27 @@ final class ClipboardHistoryStore: ObservableObject {
             SoundManager.playPinSound()
         }
         persistence.save(items)
+    }
+
+    // MARK: - Collection Management
+
+    func addToCollection(_ item: ClipboardItem, collectionId: UUID) {
+        collectionStore.addItem(fingerprint: item.fingerprint, to: collectionId)
+        SoundManager.playPinSound()
+    }
+
+    func removeFromCollection(_ item: ClipboardItem, collectionId: UUID) {
+        collectionStore.removeItem(fingerprint: item.fingerprint, from: collectionId)
+        SoundManager.playPinSound()
+    }
+
+    func toggleCollection(_ item: ClipboardItem, collectionId: UUID) {
+        let collections = collectionStore.collections(containing: item.fingerprint)
+        if collections.contains(where: { $0.id == collectionId }) {
+            removeFromCollection(item, collectionId: collectionId)
+        } else {
+            addToCollection(item, collectionId: collectionId)
+        }
     }
 
     func updatePinnedTitle(for item: ClipboardItem, title: String) {

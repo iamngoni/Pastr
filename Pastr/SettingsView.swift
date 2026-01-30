@@ -8,11 +8,14 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var historyStore: ClipboardHistoryStore
+    @ObservedObject private var tagStore = TagStore.shared
     let hotKeyManager: HotKeyManager
 
     @State private var showClearHistoryAlert = false
     @State private var showAppPicker = false
     @State private var showPasswordPrompt = false
+    @State private var showCreateTag = false
+    @State private var editingTag: Tag?
     @State private var passwordPromptMode: PasswordPromptMode = .backup
     @State private var pendingBackupURL: URL?
     @State private var pendingRestoreURL: URL?
@@ -63,6 +66,50 @@ struct SettingsView: View {
                             subtitle: "Notify when a new version is available",
                             isOn: $settings.checkForUpdatesAutomatically
                         )
+                    }
+
+                    // Display Section
+                    SettingsSection(title: "Display") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Interface size")
+                                .font(.system(size: 13))
+                                .foregroundColor(Color(white: 0.7))
+
+                            Text("Adjust card and text size for your display")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(white: 0.5))
+
+                            DisplaySizePicker(selectedSize: $settings.displaySize)
+                        }
+                    }
+
+                    // Tags Section
+                    SettingsSection(title: "Tags") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Organize clipboard items with tags")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(white: 0.5))
+
+                            TagsListView(
+                                tagStore: tagStore,
+                                onEdit: { tag in editingTag = tag },
+                                onDelete: { tag in tagStore.delete(tag.id) }
+                            )
+
+                            HStack {
+                                Button {
+                                    showCreateTag = true
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "plus")
+                                        Text("Add Tag")
+                                    }
+                                }
+                                .buttonStyle(SecondaryButtonStyle())
+
+                                Spacer()
+                            }
+                        }
                     }
 
                     // Privacy Section
@@ -383,6 +430,23 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAppPicker) {
             AppPickerView(settings: settings, isPresented: $showAppPicker)
+        }
+        .sheet(isPresented: $showCreateTag) {
+            TagEditorSheet(
+                tagStore: tagStore,
+                tag: nil,
+                isPresented: $showCreateTag
+            )
+        }
+        .sheet(item: $editingTag) { tag in
+            TagEditorSheet(
+                tagStore: tagStore,
+                tag: tag,
+                isPresented: Binding(
+                    get: { editingTag != nil },
+                    set: { if !$0 { editingTag = nil } }
+                )
+            )
         }
         .sheet(isPresented: $showPasswordPrompt) {
             BackupPasswordPrompt(
@@ -1088,6 +1152,40 @@ struct HistoryMaxItemsPicker: View {
     }
 }
 
+// MARK: - Display Size Picker
+
+struct DisplaySizePicker: View {
+    @Binding var selectedSize: DisplaySize
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(DisplaySize.allCases) { size in
+                Button {
+                    selectedSize = size
+                } label: {
+                    Text(size.label)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(selectedSize == size ? .white : Color(white: 0.5))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(
+                                    selectedSize == size
+                                        ? Color(red: 0.04, green: 0.52, blue: 1) : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.08))
+        )
+    }
+}
+
 // MARK: - Button Styles
 
 struct SecondaryButtonStyle: ButtonStyle {
@@ -1145,6 +1243,209 @@ struct SmallIconButtonStyle: ButtonStyle {
                     .fill(Color.white.opacity(0.08))
             )
             .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+// MARK: - Tags List View
+
+struct TagsListView: View {
+    @ObservedObject var tagStore: TagStore
+    let onEdit: (Tag) -> Void
+    let onDelete: (Tag) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if tagStore.tags.isEmpty {
+                Text("No tags yet")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+            } else {
+                ForEach(tagStore.tags) { tag in
+                    TagRow(tag: tag, onEdit: { onEdit(tag) }, onDelete: { onDelete(tag) })
+
+                    if tag.id != tagStore.tags.last?.id {
+                        Divider()
+                            .background(Color.white.opacity(0.05))
+                    }
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Tag Row
+
+struct TagRow: View {
+    let tag: Tag
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(Color(hex: tag.color))
+                .frame(width: 12, height: 12)
+
+            Text(tag.name)
+                .font(.system(size: 13))
+                .foregroundColor(Color(white: 0.85))
+
+            Spacer()
+
+            Button {
+                onEdit()
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(white: 0.5))
+            }
+            .buttonStyle(.plain)
+            .opacity(0.6)
+
+            Button {
+                onDelete()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color(white: 0.5))
+            }
+            .buttonStyle(.plain)
+            .opacity(0.6)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Tag Editor Sheet
+
+struct TagEditorSheet: View {
+    @ObservedObject var tagStore: TagStore
+    let tag: Tag?
+    @Binding var isPresented: Bool
+
+    @State private var name: String = ""
+    @State private var selectedColor: String = "#0A84FF"
+
+    private let tagColors = [
+        "#0A84FF", // Blue
+        "#30D158", // Green
+        "#FF9F0A", // Orange
+        "#FF453A", // Red
+        "#BF5AF2", // Purple
+        "#FF375F", // Pink
+        "#64D2FF", // Cyan
+        "#FFD60A", // Yellow
+        "#AC8E68", // Brown
+        "#8E8E93", // Gray
+    ]
+
+    private var isEditing: Bool { tag != nil }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(isEditing ? "Edit Tag" : "Create Tag")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.white)
+
+            // Name field
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Name")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.6))
+
+                TextField("Tag name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            // Color picker
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Color")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.6))
+
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(32), spacing: 8), count: 5), spacing: 8) {
+                    ForEach(tagColors, id: \.self) { color in
+                        Button {
+                            selectedColor = color
+                        } label: {
+                            Circle()
+                                .fill(Color(hex: color))
+                                .frame(width: 28, height: 28)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: selectedColor == color ? 2 : 0)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Preview
+            HStack(spacing: 8) {
+                Text("Preview:")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.5))
+
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color(hex: selectedColor))
+                        .frame(width: 8, height: 8)
+                    Text(name.isEmpty ? "Tag name" : name)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(hex: selectedColor))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(Color(hex: selectedColor).opacity(0.2))
+                )
+            }
+
+            Spacer()
+
+            // Buttons
+            HStack {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                Spacer()
+
+                Button(isEditing ? "Save" : "Create") {
+                    if isEditing, let tag = tag {
+                        tagStore.update(tag.id, name: name, color: selectedColor)
+                    } else {
+                        tagStore.create(name: name, color: selectedColor)
+                    }
+                    isPresented = false
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 320, height: 340)
+        .background(Color(nsColor: NSColor(red: 0.11, green: 0.11, blue: 0.118, alpha: 1)))
+        .onAppear {
+            if let tag = tag {
+                name = tag.name
+                selectedColor = tag.color
+            }
+        }
     }
 }
 

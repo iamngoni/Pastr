@@ -2,6 +2,7 @@ import AppKit
 
 final class PasteController {
     private var previousApp: NSRunningApplication?
+    private let pasteQueue = PasteQueue.shared
 
     func captureFrontmostApp() {
         previousApp = NSWorkspace.shared.frontmostApplication
@@ -30,6 +31,21 @@ final class PasteController {
             targetApp.activate(options: [.activateIgnoringOtherApps])
         }
         triggerPasteShortcut(after: delay)
+    }
+
+    /// Paste the next item from the queue. Returns true if an item was pasted.
+    @discardableResult
+    func pasteNextFromQueue(after delay: TimeInterval) -> Bool {
+        guard let item = pasteQueue.dequeue() else {
+            return false
+        }
+        paste(item: item, after: delay)
+        return true
+    }
+
+    /// Check if queue mode is active and there are items to paste
+    var canPasteFromQueue: Bool {
+        pasteQueue.isActive && pasteQueue.hasItems
     }
 
     private func triggerPasteShortcut(after delay: TimeInterval) {
