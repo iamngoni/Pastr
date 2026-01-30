@@ -16,6 +16,8 @@ final class PanelWindowController {
     private let onRevealInFinder: (ClipboardItem) -> Void
     private let onDelete: ([ClipboardItem]) -> Void
     private let onOpenSettings: () -> Void
+    private let onAddToCollection: (ClipboardItem, UUID) -> Void
+    private let onRemoveFromCollection: (ClipboardItem, UUID) -> Void
     private var clickMonitor: Any?
     private var keyMonitor: Any?
 
@@ -32,7 +34,9 @@ final class PanelWindowController {
         onOpenLink: @escaping (ClipboardItem) -> Void,
         onRevealInFinder: @escaping (ClipboardItem) -> Void,
         onDelete: @escaping ([ClipboardItem]) -> Void,
-        onOpenSettings: @escaping () -> Void
+        onOpenSettings: @escaping () -> Void,
+        onAddToCollection: @escaping (ClipboardItem, UUID) -> Void,
+        onRemoveFromCollection: @escaping (ClipboardItem, UUID) -> Void
     ) {
         self.historyStore = historyStore
         self.onSelect = onSelect
@@ -43,6 +47,8 @@ final class PanelWindowController {
         self.onRevealInFinder = onRevealInFinder
         self.onDelete = onDelete
         self.onOpenSettings = onOpenSettings
+        self.onAddToCollection = onAddToCollection
+        self.onRemoveFromCollection = onRemoveFromCollection
         self.viewModel = PanelViewModel(historyStore: historyStore)
 
         let panel = PastrPanel(
@@ -67,7 +73,9 @@ final class PanelWindowController {
             onOpenLink: onOpenLink,
             onRevealInFinder: onRevealInFinder,
             onDelete: onDelete,
-            onOpenSettings: onOpenSettings
+            onOpenSettings: onOpenSettings,
+            onAddToCollection: onAddToCollection,
+            onRemoveFromCollection: onRemoveFromCollection
         )
         panel.contentView = NSHostingView(rootView: rootView)
 
@@ -155,7 +163,9 @@ final class PanelWindowController {
 
     private func panelFrame(for screen: NSScreen) -> NSRect {
         let margin: CGFloat = 18
-        let height: CGFloat = 280
+        let displaySize = settingsStore.displaySize
+        // Use dynamic height based on card height + header/padding
+        let height: CGFloat = displaySize.cardHeight + 100
         let width = screen.visibleFrame.width - margin * 2
         let x = screen.visibleFrame.minX + margin
         let y = screen.visibleFrame.minY + margin
@@ -186,28 +196,43 @@ final class PanelWindowController {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
 
-            // Handle Cmd+A for select all
-            if event.modifierFlags.contains(.command) && event.keyCode == 0 {
+            // Check if a text field is focused - if so, let it handle most keys
+            let isTextFieldFocused = self.isFirstResponderTextField()
+
+            // Handle Cmd+A for select all (only when not in text field)
+            if event.modifierFlags.contains(.command) && event.keyCode == 0 && !isTextFieldFocused {
                 self.viewModel.selectAll()
                 return nil
             }
 
             switch event.keyCode {
             case 123: // Left arrow
+                // Allow arrow keys in text field for cursor movement
+                if isTextFieldFocused { return event }
                 self.viewModel.selectPrevious()
                 return nil
             case 124: // Right arrow
+                if isTextFieldFocused { return event }
                 self.viewModel.selectNext()
                 return nil
             case 49: // Space
+                // Allow space in text field for typing
+                if isTextFieldFocused { return event }
                 self.viewModel.togglePreviewForSelected()
                 return nil
             case 36, 76: // Enter/Return
+                // Allow Enter to work normally when search has text (to confirm search)
+                // but also select item when not searching
+                if isTextFieldFocused && !self.viewModel.searchText.isEmpty {
+                    return event
+                }
                 if let item = self.viewModel.selectedItem {
                     self.onSelect(item)
                 }
                 return nil
             case 51, 117: // Delete (backspace) or Forward Delete
+                // CRITICAL: Let text field handle backspace for editing search text
+                if isTextFieldFocused { return event }
                 let itemsToDelete = self.viewModel.selectedItems
                 if !itemsToDelete.isEmpty {
                     self.onDelete(itemsToDelete)
@@ -215,12 +240,23 @@ final class PanelWindowController {
                 }
                 return nil
             case 53: // Escape
+                // If searching, clear search first; otherwise hide panel
+                if !self.viewModel.searchText.isEmpty {
+                    self.viewModel.searchText = ""
+                    return nil
+                }
                 self.hidePanel()
                 return nil
             default:
                 return event
             }
         }
+    }
+
+    private func isFirstResponderTextField() -> Bool {
+        guard let firstResponder = panel.firstResponder else { return false }
+        // Check if it's a text view (used by SwiftUI TextField) or text field
+        return firstResponder is NSTextView || firstResponder is NSTextField
     }
 
     private func stopKeyMonitor() {

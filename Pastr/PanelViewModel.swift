@@ -11,8 +11,10 @@ final class PanelViewModel: ObservableObject {
     }
     @Published var selectedItemIds: Set<UUID> = []
     @Published private(set) var previewItem: ClipboardItem?
+    @Published var showingCreateCollection: Bool = false
 
     private let historyStore: ClipboardHistoryStore
+    private let collectionStore = CollectionStore.shared
     private let settings = SettingsStore.shared
     private var previewSource: PreviewSource?
     private var hoverWorkItem: DispatchWorkItem?
@@ -27,6 +29,13 @@ final class PanelViewModel: ObservableObject {
         self.historyStore = historyStore
         // Invalidate cache when history changes
         historyStore.$items
+            .sink { [weak self] _ in
+                self?.invalidateFilteredItems()
+            }
+            .store(in: &cancellables)
+
+        // Invalidate cache when collections change
+        collectionStore.$collections
             .sink { [weak self] _ in
                 self?.invalidateFilteredItems()
             }

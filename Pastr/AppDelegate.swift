@@ -6,12 +6,14 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
     private let hotKeyManager = HotKeyManager.shared
+    private let hotCornerMonitor = HotCornerMonitor.shared
     private var panelWindowController: PanelWindowController?
     private var clipboardMonitor: ClipboardMonitor?
     private var pasteController: PasteController?
     private let historyStore = ClipboardHistoryStore.shared
     private let settingsStore = SettingsStore.shared
     private let pinnedStore = PinnedStore.shared
+    private let pasteQueue = PasteQueue.shared
     private var onboardingController: OnboardingWindowController?
     private var settingsWindow: NSWindow?
     private let clipboardActions = ClipboardActions()
@@ -56,6 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onOpenSettings: { [weak self] in
                 self?.showSettings()
+            },
+            onAddToCollection: { [weak self] item, collectionId in
+                self?.historyStore.addToCollection(item, collectionId: collectionId)
+            },
+            onRemoveFromCollection: { [weak self] item, collectionId in
+                self?.historyStore.removeFromCollection(item, collectionId: collectionId)
             }
         )
 
@@ -71,10 +79,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyManager.updateHandler { [weak self] in
             self?.togglePanel()
         }
+        hotKeyManager.updateQueueHandler { [weak self] in
+            self?.toggleQueueMode()
+        }
         hotKeyManager.register(keyCode: settingsStore.hotKeyKeyCode, modifiers: settingsStore.hotKeyModifiers)
+        hotKeyManager.registerQueueHotKey(keyCode: settingsStore.queueModeKeyCode, modifiers: settingsStore.queueModeModifiers)
 
         clipboardMonitor = ClipboardMonitor(historyStore: historyStore)
         clipboardMonitor?.start()
+
+        // Setup hot corner
+        hotCornerMonitor.setHandler { [weak self] in
+            self?.togglePanel()
+        }
+        hotCornerMonitor.start()
 
         if settingsStore.iCloudSyncEnabled {
             if let cloudItems = try? pinnedStore.fetchAll() {
@@ -103,10 +121,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.statusBarController?.setVisible(visible)
             }
             .store(in: &cancellables)
+
+        // Restart hot corner monitor when settings change
+        settingsStore.$hotCorner
+            .sink { [weak self] _ in
+                self?.hotCornerMonitor.restart()
+            }
+            .store(in: &cancellables)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         hotKeyManager.unregisterHotKey()
+        hotCornerMonitor.stop()
         clipboardMonitor?.stop()
     }
 
@@ -117,6 +143,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pasteController?.captureFrontmostApp()
             panelWindowController?.showPanel()
         }
+    }
+
+    private func toggleQueueMode() {
+        pasteQueue.toggle()
+        // Play sound to indicate mode change
+        if pasteQueue.isActive {
+            SoundManager.playPinSound()
+        }
+        // Update status bar to reflect queue mode
+        statusBarController?.updateQueueStatus(active: pasteQueue.isActive, count: pasteQueue.remainingCount)
     }
 
     private func handlePaste(item: ClipboardItem) {
