@@ -206,32 +206,25 @@ final class PanelWindowController {
             }
 
             switch event.keyCode {
-            case 123: // Left arrow
-                // Allow arrow keys in text field for cursor movement
-                if isTextFieldFocused { return event }
+            case 123: // Left arrow - ALWAYS navigate items
                 self.viewModel.selectPrevious()
                 return nil
-            case 124: // Right arrow
-                if isTextFieldFocused { return event }
+            case 124: // Right arrow - ALWAYS navigate items
                 self.viewModel.selectNext()
                 return nil
             case 49: // Space
-                // Allow space in text field for typing
+                // Allow space in text field for typing, otherwise toggle preview
                 if isTextFieldFocused { return event }
                 self.viewModel.togglePreviewForSelected()
                 return nil
             case 36, 76: // Enter/Return
-                // Allow Enter to work normally when search has text (to confirm search)
-                // but also select item when not searching
-                if isTextFieldFocused && !self.viewModel.searchText.isEmpty {
-                    return event
-                }
+                // When searching, Enter pastes the selected item
                 if let item = self.viewModel.selectedItem {
                     self.onSelect(item)
                 }
                 return nil
             case 51, 117: // Delete (backspace) or Forward Delete
-                // CRITICAL: Let text field handle backspace for editing search text
+                // Let text field handle backspace for editing search text
                 if isTextFieldFocused { return event }
                 let itemsToDelete = self.viewModel.selectedItems
                 if !itemsToDelete.isEmpty {
