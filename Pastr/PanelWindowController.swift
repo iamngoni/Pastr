@@ -205,11 +205,18 @@ final class PanelWindowController {
                 return nil
             }
 
+            // Check if actively editing search text (field focused AND has text)
+            let isEditingSearch = isTextFieldFocused && !self.viewModel.searchText.isEmpty
+
             switch event.keyCode {
-            case 123: // Left arrow - ALWAYS navigate items
+            case 123: // Left arrow
+                // Allow cursor movement when editing search, otherwise navigate items
+                if isEditingSearch { return event }
                 self.viewModel.selectPrevious()
                 return nil
-            case 124: // Right arrow - ALWAYS navigate items
+            case 124: // Right arrow
+                // Allow cursor movement when editing search, otherwise navigate items
+                if isEditingSearch { return event }
                 self.viewModel.selectNext()
                 return nil
             case 49: // Space
