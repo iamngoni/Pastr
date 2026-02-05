@@ -60,12 +60,6 @@ struct SettingsView: View {
                             subtitle: "Play sounds for copy and paste actions",
                             isOn: $settings.playSoundEffects
                         )
-
-                        SettingsToggleRow(
-                            title: "Check for updates automatically",
-                            subtitle: "Notify when a new version is available",
-                            isOn: $settings.checkForUpdatesAutomatically
-                        )
                     }
 
                     // Display Section

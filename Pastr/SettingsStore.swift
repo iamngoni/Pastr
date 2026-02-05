@@ -103,10 +103,6 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(ignoredAppBundleIds, forKey: Keys.ignoredAppBundleIds) }
     }
 
-    @Published var checkForUpdatesAutomatically: Bool {
-        didSet { defaults.set(checkForUpdatesAutomatically, forKey: Keys.checkForUpdatesAutomatically) }
-    }
-
     @Published var displaySize: DisplaySize {
         didSet { defaults.set(displaySize.rawValue, forKey: Keys.displaySize) }
     }
@@ -191,10 +187,6 @@ final class SettingsStore: ObservableObject {
             "com.apple.Passwords"
         ]
 
-        // Check for updates automatically - default to true
-        let storedCheckUpdates = defaults.object(forKey: Keys.checkForUpdatesAutomatically)
-        checkForUpdatesAutomatically = storedCheckUpdates == nil ? true : defaults.bool(forKey: Keys.checkForUpdatesAutomatically)
-
         // Display size - default to auto (detects based on screen)
         if let storedDisplaySize = defaults.string(forKey: Keys.displaySize),
            let size = DisplaySize(rawValue: storedDisplaySize) {
@@ -229,7 +221,6 @@ final class SettingsStore: ObservableObject {
         static let ignoreConfidentialContent = "ignoreConfidentialContent"
         static let ignoreTransientContent = "ignoreTransientContent"
         static let ignoredAppBundleIds = "ignoredAppBundleIds"
-        static let checkForUpdatesAutomatically = "checkForUpdatesAutomatically"
         static let displaySize = "displaySize"
     }
 
