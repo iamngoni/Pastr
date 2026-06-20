@@ -1,0 +1,6 @@
+{
+  "description": "Pastr brings your clipboard history to iPhone and iPad with a keyboard extension, share extension, and iCloud sync for Pastr on Mac.\n\nSAVE FROM ANY APP\nUse the iOS share sheet to send links, text, images, and files to Pastr. Items you save are organized as recent clipboard entries with previews.\n\nPASTE WHEN YOU TYPE\nSwitch to the Pastr keyboard from the globe key to browse saved text and pinned items without leaving the current app.\n\nSYNC WITH MAC\nKeep your Pastr history and pinned items available across devices with iCloud.\n\nMADE FOR IOS\nPastr does not run background clipboard monitoring on iPhone or iPad. Clipboard items are saved only when you add them through the share sheet, keyboard, or the Pastr app.",
+  "keywords": "clipboard,copy,paste,history,manager,snippets,text,productivity,developer,code,universal clipboard",
+  "marketingUrl": "https://pastr.iamngoni.dev",
+  "supportUrl": "https://pastr.iamngoni.dev"
+}

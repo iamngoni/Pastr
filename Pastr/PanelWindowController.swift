@@ -11,7 +11,7 @@ final class PanelWindowController {
     private let onSelect: (ClipboardItem) -> Void
     private let onTogglePin: (ClipboardItem) -> Void
     private let onCopy: (ClipboardItem) -> Void
-    private let onPastePlainText: (ClipboardItem) -> Void
+    private let onCopyPlainText: (ClipboardItem) -> Void
     private let onOpenLink: (ClipboardItem) -> Void
     private let onRevealInFinder: (ClipboardItem) -> Void
     private let onDelete: ([ClipboardItem]) -> Void
@@ -30,7 +30,7 @@ final class PanelWindowController {
         onSelect: @escaping (ClipboardItem) -> Void,
         onTogglePin: @escaping (ClipboardItem) -> Void,
         onCopy: @escaping (ClipboardItem) -> Void,
-        onPastePlainText: @escaping (ClipboardItem) -> Void,
+        onCopyPlainText: @escaping (ClipboardItem) -> Void,
         onOpenLink: @escaping (ClipboardItem) -> Void,
         onRevealInFinder: @escaping (ClipboardItem) -> Void,
         onDelete: @escaping ([ClipboardItem]) -> Void,
@@ -42,7 +42,7 @@ final class PanelWindowController {
         self.onSelect = onSelect
         self.onTogglePin = onTogglePin
         self.onCopy = onCopy
-        self.onPastePlainText = onPastePlainText
+        self.onCopyPlainText = onCopyPlainText
         self.onOpenLink = onOpenLink
         self.onRevealInFinder = onRevealInFinder
         self.onDelete = onDelete
@@ -69,7 +69,7 @@ final class PanelWindowController {
             onSelect: onSelect,
             onTogglePin: onTogglePin,
             onCopy: onCopy,
-            onPastePlainText: onPastePlainText,
+            onCopyPlainText: onCopyPlainText,
             onOpenLink: onOpenLink,
             onRevealInFinder: onRevealInFinder,
             onDelete: onDelete,

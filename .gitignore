@@ -1,2 +1,7 @@
 build/
 *.log
+.asc/artifacts/
+DerivedData/
+Mobile/DerivedData/
+*.xcuserstate
+xcuserdata/

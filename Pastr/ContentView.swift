@@ -14,7 +14,7 @@ struct ContentView: View {
                 .font(.system(size: 48))
             Text("Pastr runs in the menu bar.")
                 .font(.headline)
-            Text("Use Cmd+B to open the quick paste panel.")
+            Text("Use Cmd+B to open the clipboard panel.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }

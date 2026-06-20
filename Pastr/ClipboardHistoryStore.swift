@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CoreData
 
 final class ClipboardHistoryStore: ObservableObject {
     static let shared = ClipboardHistoryStore()
@@ -271,6 +272,30 @@ final class ClipboardHistoryStore: ObservableObject {
                 self.syncAllToCloud()
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(
+            for: .NSPersistentStoreRemoteChange,
+            object: pinnedStore.remoteChangeNotificationObject
+        )
+        .sink { [weak self] _ in
+            self?.mergeLatestCloudItems()
+        }
+        .store(in: &cancellables)
+    }
+
+    private func mergeLatestCloudItems() {
+        guard settings.iCloudSyncEnabled else { return }
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self,
+                  let cloudItems = try? self.pinnedStore.fetchAll() else {
+                return
+            }
+
+            DispatchQueue.main.async {
+                self.mergeCloudItems(cloudItems)
+            }
+        }
     }
 
     private func syncUpsert(_ item: ClipboardItem) {

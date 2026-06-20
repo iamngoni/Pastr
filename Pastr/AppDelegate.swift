@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotCornerMonitor = HotCornerMonitor.shared
     private var panelWindowController: PanelWindowController?
     private var clipboardMonitor: ClipboardMonitor?
-    private var pasteController: PasteController?
+    private var clipboardWriter: ClipboardWriter?
     private let historyStore = ClipboardHistoryStore.shared
     private let settingsStore = SettingsStore.shared
     private let pinnedStore = PinnedStore.shared
@@ -29,14 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSApp.setActivationPolicy(.accessory)
 
-        // Request accessibility permissions (needed for pasting via CGEvent)
-        requestAccessibilityPermissions()
-
-        pasteController = PasteController()
+        clipboardWriter = ClipboardWriter()
         panelWindowController = PanelWindowController(
             historyStore: historyStore,
             onSelect: { [weak self] item in
-                self?.handlePaste(item: item)
+                self?.copyToClipboard(item: item)
             },
             onTogglePin: { [weak self] item in
                 self?.historyStore.togglePin(for: item)
@@ -44,8 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onCopy: { [weak self] item in
                 self?.clipboardActions.copyToClipboard(item)
             },
-            onPastePlainText: { [weak self] item in
-                self?.handlePastePlainText(item: item)
+            onCopyPlainText: { [weak self] item in
+                self?.copyPlainText(item: item)
             },
             onOpenLink: { [weak self] item in
                 self?.clipboardActions.openLink(item)
@@ -133,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panelWindowController?.isPanelVisible == true {
             panelWindowController?.hidePanel()
         } else {
-            pasteController?.captureFrontmostApp()
+            clipboardWriter?.captureFrontmostApp()
             panelWindowController?.showPanel()
         }
     }
@@ -148,16 +145,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController?.updateQueueStatus(active: pasteQueue.isActive, count: pasteQueue.remainingCount)
     }
 
-    private func handlePaste(item: ClipboardItem) {
-        guard let pasteController else { return }
+    private func copyToClipboard(item: ClipboardItem) {
+        guard let clipboardWriter else { return }
         panelWindowController?.hidePanel()
-        pasteController.paste(item: item, after: settingsStore.pasteDelay)
+        clipboardWriter.copy(item: item, returnFocusAfter: settingsStore.pasteDelay)
     }
 
-    private func handlePastePlainText(item: ClipboardItem) {
-        guard let pasteController else { return }
+    private func copyPlainText(item: ClipboardItem) {
+        guard let clipboardWriter else { return }
         panelWindowController?.hidePanel()
-        pasteController.pastePlainText(item.plainText ?? item.previewText, after: settingsStore.pasteDelay)
+        clipboardWriter.copyPlainText(item.plainText ?? item.previewText, returnFocusAfter: settingsStore.pasteDelay)
     }
 
     private func showOnboarding() {
@@ -167,14 +164,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onboardingController = controller
         controller.showWindow(nil)
         controller.window?.makeKeyAndOrderFront(nil)
-    }
-
-    private func requestAccessibilityPermissions() {
-        // Check without prompting - onboarding handles the initial prompt
-        let trusted = AXIsProcessTrustedWithOptions(nil)
-        if !trusted {
-            print("Accessibility permissions not granted. Paste functionality requires accessibility access.")
-        }
     }
 
     private func showSettings() {

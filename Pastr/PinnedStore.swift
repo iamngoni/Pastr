@@ -7,6 +7,10 @@ final class PinnedStore {
     private let container: NSPersistentCloudKitContainer
     private let migrationKey = "cloudHistoryPinnedMigrationCompleted"
 
+    var remoteChangeNotificationObject: NSPersistentStoreCoordinator {
+        container.persistentStoreCoordinator
+    }
+
     private init() {
         container = NSPersistentCloudKitContainer(name: "Pastr")
         let description = container.persistentStoreDescriptions.first

@@ -5,8 +5,6 @@ struct OnboardingView: View {
     let onFinish: () -> Void
 
     @State private var currentPage = 0
-    @State private var accessibilityGranted = false
-    @State private var isCheckingPermissions = false
 
     private let totalPages = 3
 
@@ -34,9 +32,6 @@ struct OnboardingView: View {
                 // Bottom navigation
                 bottomNavigation
             }
-        }
-        .onAppear {
-            checkAccessibilityPermission()
         }
     }
 
@@ -110,8 +105,8 @@ struct OnboardingView: View {
 
                 FeatureRow(
                     icon: "icloud.fill",
-                    title: "Sync Across Devices",
-                    description: "Enable iCloud sync to access history everywhere"
+                    title: "Copy, Then Paste",
+                    description: "Pick an item to copy it, then paste it wherever you need it"
                 )
             }
 
@@ -126,94 +121,55 @@ struct OnboardingView: View {
         VStack(spacing: 32) {
             Spacer()
 
-            Text("Almost there!")
+            Text("Ready to copy")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundColor(.white)
 
-            Text("Pastr needs Accessibility permission to paste items directly into other apps.")
+            Text("Pick an item to copy it to the system clipboard, then paste it wherever you need it.")
                 .font(.system(size: 14))
                 .foregroundColor(Color(red: 0.56, green: 0.56, blue: 0.58))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
-            // Permission card
             GlassCard(cornerRadius: 16) {
                 HStack(spacing: 16) {
                     ZStack {
                         Circle()
-                            .fill(accessibilityGranted ?
-                                  LinearGradient(
+                            .fill(
+                                LinearGradient(
                                     colors: [Color(red: 0.2, green: 0.78, blue: 0.35),
                                              Color(red: 0.35, green: 0.85, blue: 0.5)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
-                                  ) :
-                                  LinearGradient(
-                                    colors: [Color(red: 1, green: 0.58, blue: 0),
-                                             Color(red: 1, green: 0.7, blue: 0.25)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                  )
+                                )
                             )
                             .frame(width: 44, height: 44)
-                            .shadow(color: accessibilityGranted ?
-                                    Color(red: 0.2, green: 0.78, blue: 0.35).opacity(0.4) :
-                                    Color(red: 1, green: 0.58, blue: 0).opacity(0.4),
-                                    radius: 8, y: 4)
+                            .shadow(color: Color(red: 0.2, green: 0.78, blue: 0.35).opacity(0.4), radius: 8, y: 4)
 
-                        Image(systemName: accessibilityGranted ? "checkmark" : "hand.raised.fill")
+                        Image(systemName: "checkmark")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(.white)
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Accessibility Access")
+                        Text("No Extra Permissions")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.white)
 
-                        Text(accessibilityGranted ? "Permission granted" : "Required for pasting")
+                        Text("Select an item to copy it to the clipboard")
                             .font(.system(size: 12))
                             .foregroundColor(Color(red: 0.56, green: 0.56, blue: 0.58))
                     }
 
                     Spacer()
 
-                    if !accessibilityGranted {
-                        Button(action: requestAccessibilityPermission) {
-                            Text("Grant")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(
-                                    LinearGradient(
-                                        colors: [Color(red: 0.04, green: 0.52, blue: 1),
-                                                 Color(red: 0.39, green: 0.71, blue: 1)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .cornerRadius(8)
-                                .shadow(color: Color(red: 0.04, green: 0.52, blue: 1).opacity(0.3), radius: 4, y: 2)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(Color(red: 0.2, green: 0.78, blue: 0.35))
-                    }
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(Color(red: 0.2, green: 0.78, blue: 0.35))
                 }
                 .padding(20)
             }
             .padding(.horizontal, 20)
-
-            if !accessibilityGranted {
-                Text("You can also grant this later in System Settings → Privacy & Security → Accessibility")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(red: 0.56, green: 0.56, blue: 0.58))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-            }
 
             Spacer()
         }
@@ -289,48 +245,7 @@ struct OnboardingView: View {
         )
     }
 
-    // MARK: - Permission Handling
-
-    private func checkAccessibilityPermission() {
-        accessibilityGranted = AXIsProcessTrustedWithOptions(nil)
-    }
-
-    private func requestAccessibilityPermission() {
-        // First try to prompt via AXIsProcessTrustedWithOptions
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        let alreadyGranted = AXIsProcessTrustedWithOptions(options)
-
-        if alreadyGranted {
-            accessibilityGranted = true
-            return
-        }
-
-        // Also open System Settings directly to Accessibility
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
-
-        // Poll for permission changes
-        isCheckingPermissions = true
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-            let granted = AXIsProcessTrustedWithOptions(nil)
-            if granted {
-                DispatchQueue.main.async {
-                    self.accessibilityGranted = true
-                    self.isCheckingPermissions = false
-                }
-                timer.invalidate()
-            }
-        }
-    }
-
     private func finishOnboarding() {
-        // Request accessibility permissions if not already granted
-        if !accessibilityGranted {
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
-        }
-
         onFinish()
         NSApp.keyWindow?.close()
     }

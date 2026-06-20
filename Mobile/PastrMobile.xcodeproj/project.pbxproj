@@ -1,0 +1,659 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1465DAA8B7562D23313F5898 /* Pastr.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 5D73BE04EC48F7DBA68ADAE1 /* Pastr.xcdatamodeld */; };
+		1949E4F397C7124328C85DFC /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC9D07A2A813A543C1FDBA8 /* KeyboardViewController.swift */; };
+		22A4AD5C48245413D6874149 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8CFF181355DB745829D3C143 /* Assets.xcassets */; };
+		245EBF4EC1FA5F8280B9D7CF /* PastrCloudClipStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5DA9BE9669D1E7EC0636FE3 /* PastrCloudClipStore.swift */; };
+		28CA4068AD43680A48D5C85B /* PastrSharedClipCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBFA8BC46A4DF441CD43EC75 /* PastrSharedClipCache.swift */; };
+		327CC95E735BFCB5C318A6B3 /* PastrMobileRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FAB6A7BD976FA732D850666 /* PastrMobileRootView.swift */; };
+		36D8413964A7BE0D424EAAF6 /* ClipThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761A7C2092A31C27CA5B520B /* ClipThumbnail.swift */; };
+		4A40582D26735675D4CF69AF /* MobileClipStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7302FC45EE030C51810FDB34 /* MobileClipStore.swift */; };
+		50F0B0540F1E355FC999ED5C /* PastrTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A54BFA53D304555323A544A /* PastrTheme.swift */; };
+		55535491F76ABFD271822352 /* PastrSharedClipCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBFA8BC46A4DF441CD43EC75 /* PastrSharedClipCache.swift */; };
+		7D5813908D54FABA2549322E /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1992E6A82826EFAE043D0A79 /* ShareViewController.swift */; };
+		7F84C029D6B60756FF8A6E04 /* ClipThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761A7C2092A31C27CA5B520B /* ClipThumbnail.swift */; };
+		8AEFAB498FF73735B0871D11 /* PastrClip.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73B81E780201A9BBCC58646 /* PastrClip.swift */; };
+		8B772E428477662F09DA568E /* PastrClip.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73B81E780201A9BBCC58646 /* PastrClip.swift */; };
+		8EF637DD05F66AACB89F2A3E /* PastrCloudClipStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5DA9BE9669D1E7EC0636FE3 /* PastrCloudClipStore.swift */; };
+		94CADED75F73B7F3050CAB7C /* PastrTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A54BFA53D304555323A544A /* PastrTheme.swift */; };
+		976DBA27FF0DD499EF1A1B3C /* PastrKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D496FAE488C2C9F9C4773740 /* PastrKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		990045357A4D888501A3ADE3 /* PastrTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A54BFA53D304555323A544A /* PastrTheme.swift */; };
+		9CA1D5CF7AEE43D482B2E552 /* PastrKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 252798368AD7A5206B394274 /* PastrKeyboardView.swift */; };
+		A76EB28360887CDED94EE98C /* PastrMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9957B3F8EAEF6533F858A4 /* PastrMobileApp.swift */; };
+		B91681E3868E307A8A622FF7 /* PastrShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1A0E455702A7C5C05787A8C5 /* PastrShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C0BEDEF2BDFDE4BD92E568A4 /* ClipThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761A7C2092A31C27CA5B520B /* ClipThumbnail.swift */; };
+		CE3217A057C8028CDEFE7ED2 /* PastrSharedClipCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBFA8BC46A4DF441CD43EC75 /* PastrSharedClipCache.swift */; };
+		DC6A409865CADEF2104F2486 /* PastrClip.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73B81E780201A9BBCC58646 /* PastrClip.swift */; };
+		F92D87F5767CC6FACB730EA5 /* Pastr.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 5D73BE04EC48F7DBA68ADAE1 /* Pastr.xcdatamodeld */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4412A85D807BD1FCF9B12D8E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A4FE02D47A69154C36E96426 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CBCB44B56B05B9B582A02366;
+			remoteInfo = PastrKeyboard;
+		};
+		B9BC1E5D47C181C4C83AC11A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A4FE02D47A69154C36E96426 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5EFAD5745A9A99714BABC4F2;
+			remoteInfo = PastrShareExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2EF898472FF5F51FC270730F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				976DBA27FF0DD499EF1A1B3C /* PastrKeyboard.appex in Embed Foundation Extensions */,
+				B91681E3868E307A8A622FF7 /* PastrShareExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		008D823E7FD418DEAB00680A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		0DCCCF989AD0E06C8687D89D /* PastrKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PastrKeyboard.entitlements; sourceTree = "<group>"; };
+		1992E6A82826EFAE043D0A79 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		1A0E455702A7C5C05787A8C5 /* PastrShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PastrShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		252798368AD7A5206B394274 /* PastrKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastrKeyboardView.swift; sourceTree = "<group>"; };
+		2CC9D07A2A813A543C1FDBA8 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		608DA66BE64578A9C41FEB88 /* PastrShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PastrShareExtension.entitlements; sourceTree = "<group>"; };
+		6A9957B3F8EAEF6533F858A4 /* PastrMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastrMobileApp.swift; sourceTree = "<group>"; };
+		7302FC45EE030C51810FDB34 /* MobileClipStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileClipStore.swift; sourceTree = "<group>"; };
+		761A7C2092A31C27CA5B520B /* ClipThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipThumbnail.swift; sourceTree = "<group>"; };
+		7A54BFA53D304555323A544A /* PastrTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastrTheme.swift; sourceTree = "<group>"; };
+		8CFF181355DB745829D3C143 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		9C8AAFE21CDFC1CAB13B30B6 /* PastrMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PastrMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9FAB6A7BD976FA732D850666 /* PastrMobileRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastrMobileRootView.swift; sourceTree = "<group>"; };
+		A55D79DF1F82353915018DCE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A75A41B88FF72FB43FEE3EAD /* PastrMobile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PastrMobile.entitlements; sourceTree = "<group>"; };
+		B5DA9BE9669D1E7EC0636FE3 /* PastrCloudClipStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastrCloudClipStore.swift; sourceTree = "<group>"; };
+		C73B81E780201A9BBCC58646 /* PastrClip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastrClip.swift; sourceTree = "<group>"; };
+		D496FAE488C2C9F9C4773740 /* PastrKeyboard.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PastrKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA68EB959E1BACFCEF55FD4B /* Pastr.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = Pastr.xcdatamodel; sourceTree = "<group>"; };
+		DBFA8BC46A4DF441CD43EC75 /* PastrSharedClipCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastrSharedClipCache.swift; sourceTree = "<group>"; };
+		F85D6B0CF7010D9BF76AC427 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		008E52BD0A26FCE0B4BD5D50 /* pastr */ = {
+			isa = PBXGroup;
+			children = (
+				9A2B60CF3DB24A450E645CF7 /* Pastr */,
+			);
+			name = pastr;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		328A4BA37329AFDB8D135E31 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D496FAE488C2C9F9C4773740 /* PastrKeyboard.appex */,
+				9C8AAFE21CDFC1CAB13B30B6 /* PastrMobile.app */,
+				1A0E455702A7C5C05787A8C5 /* PastrShareExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5514900CBB76070BAACF5071 /* PastrMobile */ = {
+			isa = PBXGroup;
+			children = (
+				8CFF181355DB745829D3C143 /* Assets.xcassets */,
+				A55D79DF1F82353915018DCE /* Info.plist */,
+				7302FC45EE030C51810FDB34 /* MobileClipStore.swift */,
+				A75A41B88FF72FB43FEE3EAD /* PastrMobile.entitlements */,
+				6A9957B3F8EAEF6533F858A4 /* PastrMobileApp.swift */,
+				9FAB6A7BD976FA732D850666 /* PastrMobileRootView.swift */,
+			);
+			path = PastrMobile;
+			sourceTree = "<group>";
+		};
+		8E12AA3887316D353799949D /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				761A7C2092A31C27CA5B520B /* ClipThumbnail.swift */,
+				C73B81E780201A9BBCC58646 /* PastrClip.swift */,
+				DBFA8BC46A4DF441CD43EC75 /* PastrSharedClipCache.swift */,
+				7A54BFA53D304555323A544A /* PastrTheme.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		9A2B60CF3DB24A450E645CF7 /* Pastr */ = {
+			isa = PBXGroup;
+			children = (
+				5D73BE04EC48F7DBA68ADAE1 /* Pastr.xcdatamodeld */,
+			);
+			path = Pastr;
+			sourceTree = "<group>";
+		};
+		9DA31D63DD4332B1E9FC4273 = {
+			isa = PBXGroup;
+			children = (
+				EC36E8903BADC88D6F88E8F2 /* CloudSync */,
+				008E52BD0A26FCE0B4BD5D50 /* pastr */,
+				E5C6FC13DD10F71B61F04880 /* PastrKeyboard */,
+				5514900CBB76070BAACF5071 /* PastrMobile */,
+				E0763F1F412A91CCC38607C0 /* PastrShareExtension */,
+				8E12AA3887316D353799949D /* Shared */,
+				328A4BA37329AFDB8D135E31 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E0763F1F412A91CCC38607C0 /* PastrShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				008D823E7FD418DEAB00680A /* Info.plist */,
+				608DA66BE64578A9C41FEB88 /* PastrShareExtension.entitlements */,
+				1992E6A82826EFAE043D0A79 /* ShareViewController.swift */,
+			);
+			path = PastrShareExtension;
+			sourceTree = "<group>";
+		};
+		E5C6FC13DD10F71B61F04880 /* PastrKeyboard */ = {
+			isa = PBXGroup;
+			children = (
+				F85D6B0CF7010D9BF76AC427 /* Info.plist */,
+				2CC9D07A2A813A543C1FDBA8 /* KeyboardViewController.swift */,
+				0DCCCF989AD0E06C8687D89D /* PastrKeyboard.entitlements */,
+				252798368AD7A5206B394274 /* PastrKeyboardView.swift */,
+			);
+			path = PastrKeyboard;
+			sourceTree = "<group>";
+		};
+		EC36E8903BADC88D6F88E8F2 /* CloudSync */ = {
+			isa = PBXGroup;
+			children = (
+				B5DA9BE9669D1E7EC0636FE3 /* PastrCloudClipStore.swift */,
+			);
+			path = CloudSync;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5AA9174140BAB77EA48A0872 /* PastrMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA29F37F086EDCF5EAFBE0C7 /* Build configuration list for PBXNativeTarget "PastrMobile" */;
+			buildPhases = (
+				E36C9248787C0F699D320CD9 /* Sources */,
+				2F5DB0C9A9C593A613176937 /* Resources */,
+				2EF898472FF5F51FC270730F /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C03B7C6FBA1DBF69535ACF9E /* PBXTargetDependency */,
+				0C82ED912D3F46D8DD67D6FD /* PBXTargetDependency */,
+			);
+			name = PastrMobile;
+			packageProductDependencies = (
+			);
+			productName = PastrMobile;
+			productReference = 9C8AAFE21CDFC1CAB13B30B6 /* PastrMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5EFAD5745A9A99714BABC4F2 /* PastrShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5271E12689E63D3952414351 /* Build configuration list for PBXNativeTarget "PastrShareExtension" */;
+			buildPhases = (
+				A0801D01B64D98DE69C77132 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PastrShareExtension;
+			packageProductDependencies = (
+			);
+			productName = PastrShareExtension;
+			productReference = 1A0E455702A7C5C05787A8C5 /* PastrShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		CBCB44B56B05B9B582A02366 /* PastrKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C627A5317988ED563353CD59 /* Build configuration list for PBXNativeTarget "PastrKeyboard" */;
+			buildPhases = (
+				F6E4D11DD75968D7F5C4A00D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PastrKeyboard;
+			packageProductDependencies = (
+			);
+			productName = PastrKeyboard;
+			productReference = D496FAE488C2C9F9C4773740 /* PastrKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A4FE02D47A69154C36E96426 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					5AA9174140BAB77EA48A0872 = {
+						DevelopmentTeam = 4973Y692JU;
+						ProvisioningStyle = Automatic;
+					};
+					5EFAD5745A9A99714BABC4F2 = {
+						DevelopmentTeam = 4973Y692JU;
+						ProvisioningStyle = Automatic;
+					};
+					CBCB44B56B05B9B582A02366 = {
+						DevelopmentTeam = 4973Y692JU;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 6D3EBC799296E6AC6A0A7E0B /* Build configuration list for PBXProject "PastrMobile" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 9DA31D63DD4332B1E9FC4273;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 328A4BA37329AFDB8D135E31 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CBCB44B56B05B9B582A02366 /* PastrKeyboard */,
+				5AA9174140BAB77EA48A0872 /* PastrMobile */,
+				5EFAD5745A9A99714BABC4F2 /* PastrShareExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		2F5DB0C9A9C593A613176937 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				22A4AD5C48245413D6874149 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A0801D01B64D98DE69C77132 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				36D8413964A7BE0D424EAAF6 /* ClipThumbnail.swift in Sources */,
+				F92D87F5767CC6FACB730EA5 /* Pastr.xcdatamodeld in Sources */,
+				8B772E428477662F09DA568E /* PastrClip.swift in Sources */,
+				8EF637DD05F66AACB89F2A3E /* PastrCloudClipStore.swift in Sources */,
+				CE3217A057C8028CDEFE7ED2 /* PastrSharedClipCache.swift in Sources */,
+				94CADED75F73B7F3050CAB7C /* PastrTheme.swift in Sources */,
+				7D5813908D54FABA2549322E /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E36C9248787C0F699D320CD9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0BEDEF2BDFDE4BD92E568A4 /* ClipThumbnail.swift in Sources */,
+				4A40582D26735675D4CF69AF /* MobileClipStore.swift in Sources */,
+				1465DAA8B7562D23313F5898 /* Pastr.xcdatamodeld in Sources */,
+				8AEFAB498FF73735B0871D11 /* PastrClip.swift in Sources */,
+				245EBF4EC1FA5F8280B9D7CF /* PastrCloudClipStore.swift in Sources */,
+				A76EB28360887CDED94EE98C /* PastrMobileApp.swift in Sources */,
+				327CC95E735BFCB5C318A6B3 /* PastrMobileRootView.swift in Sources */,
+				28CA4068AD43680A48D5C85B /* PastrSharedClipCache.swift in Sources */,
+				990045357A4D888501A3ADE3 /* PastrTheme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F6E4D11DD75968D7F5C4A00D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7F84C029D6B60756FF8A6E04 /* ClipThumbnail.swift in Sources */,
+				1949E4F397C7124328C85DFC /* KeyboardViewController.swift in Sources */,
+				DC6A409865CADEF2104F2486 /* PastrClip.swift in Sources */,
+				9CA1D5CF7AEE43D482B2E552 /* PastrKeyboardView.swift in Sources */,
+				55535491F76ABFD271822352 /* PastrSharedClipCache.swift in Sources */,
+				50F0B0540F1E355FC999ED5C /* PastrTheme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0C82ED912D3F46D8DD67D6FD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5EFAD5745A9A99714BABC4F2 /* PastrShareExtension */;
+			targetProxy = B9BC1E5D47C181C4C83AC11A /* PBXContainerItemProxy */;
+		};
+		C03B7C6FBA1DBF69535ACF9E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CBCB44B56B05B9B582A02366 /* PastrKeyboard */;
+			targetProxy = 4412A85D807BD1FCF9B12D8E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		23600320D536000C2A340020 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PastrMobile/PastrMobile.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PastrMobile/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = za.co.codecraftsolutions.Pastr;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		238FB1E9DA423CE0ACB05968 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PastrKeyboard/PastrKeyboard.entitlements;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PastrKeyboard/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = za.co.codecraftsolutions.Pastr.Keyboard;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		6499F9053931D9451B6F8A62 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 4;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 4973Y692JU;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.10;
+			};
+			name = Debug;
+		};
+		6630D98472D5315A121E48A7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PastrMobile/PastrMobile.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PastrMobile/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = za.co.codecraftsolutions.Pastr;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		6F0583A51C9637B09D165D56 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 4;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 4973Y692JU;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.10;
+			};
+			name = Release;
+		};
+		C99092F87DB5127701EC927F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PastrShareExtension/PastrShareExtension.entitlements;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PastrShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = za.co.codecraftsolutions.Pastr.ShareExtension;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		D3F865C6542887DD99D10C61 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PastrKeyboard/PastrKeyboard.entitlements;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PastrKeyboard/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = za.co.codecraftsolutions.Pastr.Keyboard;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		EFD40AB206B584E66C9D8DD6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PastrShareExtension/PastrShareExtension.entitlements;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PastrShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = za.co.codecraftsolutions.Pastr.ShareExtension;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5271E12689E63D3952414351 /* Build configuration list for PBXNativeTarget "PastrShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EFD40AB206B584E66C9D8DD6 /* Debug */,
+				C99092F87DB5127701EC927F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6D3EBC799296E6AC6A0A7E0B /* Build configuration list for PBXProject "PastrMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6499F9053931D9451B6F8A62 /* Debug */,
+				6F0583A51C9637B09D165D56 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AA29F37F086EDCF5EAFBE0C7 /* Build configuration list for PBXNativeTarget "PastrMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6630D98472D5315A121E48A7 /* Debug */,
+				23600320D536000C2A340020 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C627A5317988ED563353CD59 /* Build configuration list for PBXNativeTarget "PastrKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D3F865C6542887DD99D10C61 /* Debug */,
+				238FB1E9DA423CE0ACB05968 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCVersionGroup section */
+		5D73BE04EC48F7DBA68ADAE1 /* Pastr.xcdatamodeld */ = {
+			isa = XCVersionGroup;
+			children = (
+				DA68EB959E1BACFCEF55FD4B /* Pastr.xcdatamodel */,
+			);
+			currentVersion = DA68EB959E1BACFCEF55FD4B /* Pastr.xcdatamodel */;
+			path = Pastr.xcdatamodeld;
+			sourceTree = "<group>";
+			versionGroupType = wrapper.xcdatamodel;
+		};
+/* End XCVersionGroup section */
+	};
+	rootObject = A4FE02D47A69154C36E96426 /* Project object */;
+}

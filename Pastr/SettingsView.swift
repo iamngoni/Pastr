@@ -57,7 +57,7 @@ struct SettingsView: View {
 
                         SettingsToggleRow(
                             title: "Sound effects",
-                            subtitle: "Play sounds for copy and paste actions",
+                            subtitle: "Play sounds for clipboard actions",
                             isOn: $settings.playSoundEffects
                         )
                     }
@@ -1489,4 +1489,3 @@ struct GlassCard<Content: View>: View {
             .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
     }
 }
-

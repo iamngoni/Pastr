@@ -2,13 +2,13 @@
 
 Date: 2026-01-06
 Owner: Pastr (macOS Swift app)
-Goal: Deliver a Paste-like micro-pop-up paste history panel that is fast, minimal, and out of the way, with iCloud sync for pinned items.
+Goal: Deliver a clipboard history panel that is fast, minimal, and out of the way, with iCloud sync for pinned items.
 
 ## 1) Product Intent
 - Pastr runs quietly in the background (menu bar / background agent style), always ready without feeling like a big app.
 - On global shortcut, a small sleek panel slides up from the bottom of the screen (not full overlay, not Spotlight style).
 - Panel shows a horizontal strip of recent clipboard items as clean cards (text, images, links previews).
-- Default action: choose an item -> panel closes -> paste into the previously active app after a short delay.
+- Default action: choose an item -> panel closes -> item is copied to the system clipboard.
 - Browsing: horizontal scroll; optional lightweight sections (History, Pinned/Useful).
 - Trust: pinned items sync via iCloud across Macs (CloudKit).
 
@@ -31,12 +31,11 @@ Goal: Deliver a Paste-like micro-pop-up paste history panel that is fast, minima
 - Panel is a full-width bottom bar (like Paste), not a narrow centered strip.
 - Panel can overlay above full-screen apps/spaces.
 - Dismissal on:
-  - Selection/paste action
+  - Selection/copy action
   - Esc key
   - Click outside
   - Hotkey again
-- Panel keeps focus for navigation but returns focus to prior app after paste.
-- Paste action closes panel first, then triggers Cmd+V after a short delay (~50-120ms).
+- Panel keeps focus for navigation but returns focus to the prior app after copying.
 
 ### 3.3 Clipboard Items
 - Track recent clipboard items in-memory and persisted locally.
@@ -47,13 +46,13 @@ Goal: Deliver a Paste-like micro-pop-up paste history panel that is fast, minima
   - Timestamp / relative time
   - Source app icon/name
 
-### 3.4 Selection and Pasting
-- Keyboard navigation: left/right arrows for items, Enter to paste.
-- Mouse selection: click item to paste.
-- On paste:
+### 3.4 Selection and Copying
+- Keyboard navigation: left/right arrows for items, Enter to copy.
+- Mouse selection: click item to copy.
+- On copy:
   - copy item to pasteboard
   - close panel
-  - simulate Cmd+V in previous app after a short delay
+  - return focus to the previous app
 
 ### 3.5 Sections
 - History (default)
@@ -68,7 +67,7 @@ Goal: Deliver a Paste-like micro-pop-up paste history panel that is fast, minima
   - AppDelegate / app lifecycle manager
   - ClipboardMonitor
   - PanelWindowController
-  - PasteActionController
+  - ClipboardWriter
   - Persistence (Core Data + CloudKit for pinned)
 
 ### 4.2 Data Model
@@ -98,9 +97,9 @@ Goal: Deliver a Paste-like micro-pop-up paste history panel that is fast, minima
 - Clip retention policy: default 100 items / 30 days; user-customizable with an option for unlimited.
 - Warn when storage becomes large (performance impact).
 
-### 4.4 Pasting
+### 4.4 Copying
 - Capture frontmost app before opening panel (NSWorkspace / NSRunningApplication).
-- Paste action writes to NSPasteboard and triggers Cmd+V using CGEvent.
+- Copy action writes to NSPasteboard and leaves paste initiation to the user.
 
 ### 4.5 iCloud Sync
 - Pinned items sync via NSPersistentCloudKitContainer.
@@ -135,12 +134,12 @@ Goal: Deliver a Paste-like micro-pop-up paste history panel that is fast, minima
 6) Pinned behavior: pin limit? editable titles/labels? (Answered: default max 5, customizable; editable labels)
 7) iCloud scope: should pinned items sync only across user Macs or also iOS (if future)? (Answered: macOS only)
 8) Should panel show source app icon on cards? (Answered: yes)
-9) Should paste trigger delay (e.g., 50-150ms) after closing panel? (Answered: close panel then paste with short delay)
+9) Should selection return focus after closing panel? (Answered: close panel, copy, then return focus after a short delay)
 10) Any privacy indicator or onboarding copy needed? (Answered: onboarding on first open)
 11) Do we support multiple spaces / full screen apps? (panel overlay behavior) (Answered: overlay above full-screen apps)
 12) Should Pastr appear in menu bar with quick actions or remain invisible? (Answered: menu bar icon; click opens panel; no extra actions)
 
 ## 8) Milestones
 - M1: Clipboard monitor + local persistence + horizontal history UI.
-- M2: Panel window + animation + global hotkey + paste action.
+- M2: Panel window + animation + global hotkey + copy action.
 - M3: Pinned section + iCloud sync + polish.

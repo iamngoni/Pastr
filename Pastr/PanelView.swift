@@ -9,7 +9,7 @@ struct PanelView: View {
     let onSelect: (ClipboardItem) -> Void
     let onTogglePin: (ClipboardItem) -> Void
     let onCopy: (ClipboardItem) -> Void
-    let onPastePlainText: (ClipboardItem) -> Void
+    let onCopyPlainText: (ClipboardItem) -> Void
     let onOpenLink: (ClipboardItem) -> Void
     let onRevealInFinder: (ClipboardItem) -> Void
     let onDelete: ([ClipboardItem]) -> Void
@@ -22,7 +22,7 @@ struct PanelView: View {
         onSelect: @escaping (ClipboardItem) -> Void,
         onTogglePin: @escaping (ClipboardItem) -> Void,
         onCopy: @escaping (ClipboardItem) -> Void,
-        onPastePlainText: @escaping (ClipboardItem) -> Void,
+        onCopyPlainText: @escaping (ClipboardItem) -> Void,
         onOpenLink: @escaping (ClipboardItem) -> Void,
         onRevealInFinder: @escaping (ClipboardItem) -> Void,
         onDelete: @escaping ([ClipboardItem]) -> Void,
@@ -34,7 +34,7 @@ struct PanelView: View {
         self.onSelect = onSelect
         self.onTogglePin = onTogglePin
         self.onCopy = onCopy
-        self.onPastePlainText = onPastePlainText
+        self.onCopyPlainText = onCopyPlainText
         self.onOpenLink = onOpenLink
         self.onRevealInFinder = onRevealInFinder
         self.onDelete = onDelete
@@ -359,20 +359,20 @@ struct PanelView: View {
         }
         .keyboardShortcut(.space, modifiers: [])
 
-        // Paste action
+        // Copy action
         Button {
             onSelect(item)
         } label: {
-            Label("Paste", systemImage: "doc.on.clipboard")
+            Label("Copy", systemImage: "doc.on.clipboard")
         }
         .keyboardShortcut(.return, modifiers: [])
 
-        // Paste as Plain Text
+        // Copy as plain text
         if item.plainText != nil {
             Button {
-                onPastePlainText(item)
+                onCopyPlainText(item)
             } label: {
-                Label("Paste as Plain Text", systemImage: "text.alignleft")
+                Label("Copy Plain Text", systemImage: "text.alignleft")
             }
             .keyboardShortcut(.return, modifiers: [.shift, .command])
         }
