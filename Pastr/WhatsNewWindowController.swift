@@ -1,0 +1,29 @@
+import AppKit
+import SwiftUI
+
+final class WhatsNewWindowController: NSWindowController {
+    init(version: String, onFinish: @escaping () -> Void) {
+        let view = WhatsNewView(version: version, onFinish: onFinish)
+        let hosting = NSHostingView(rootView: view)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
+                              styleMask: [.titled, .closable, .fullSizeContentView],
+                              backing: .buffered,
+                              defer: false)
+        window.center()
+        window.title = ""
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        window.standardWindowButton(.zoomButton)?.isHidden = true
+        window.backgroundColor = NSColor(red: 0.11, green: 0.11, blue: 0.118, alpha: 1)
+        window.contentView = hosting
+        window.isReleasedWhenClosed = false
+
+        super.init(window: window)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}

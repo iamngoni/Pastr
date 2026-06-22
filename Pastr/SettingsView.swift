@@ -106,6 +106,63 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Intelligence Section
+                    SettingsSection(title: "Intelligence") {
+                        Text("All processing happens on-device. Your clipboard never leaves your Mac.")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(white: 0.5))
+                            .padding(.bottom, 4)
+
+                        SettingsToggleRow(
+                            title: "On-device enrichment",
+                            subtitle: "Recognize text in images, classify clips, and detect secrets locally",
+                            isOn: $settings.aiEnrichmentEnabled
+                        )
+
+                        if settings.aiEnrichmentEnabled {
+                            SettingsToggleRow(
+                                title: "Recognize text in images",
+                                subtitle: "Make screenshots searchable with on-device OCR",
+                                isOn: $settings.ocrEnabled
+                            )
+
+                            SettingsToggleRow(
+                                title: "Search by meaning",
+                                subtitle: "Find clips semantically, not just by exact text",
+                                isOn: $settings.semanticSearchEnabled
+                            )
+
+                            SettingsToggleRow(
+                                title: "Auto-tag clips",
+                                subtitle: "Automatically tag clips by detected category",
+                                isOn: $settings.autoTaggingEnabled
+                            )
+
+                            SettingsToggleRow(
+                                title: "Detect sensitive content",
+                                subtitle: "Flag API keys, passwords, and card numbers",
+                                isOn: $settings.sensitiveDataDetectionEnabled
+                            )
+
+                            if settings.sensitiveDataDetectionEnabled {
+                                SettingsToggleRow(
+                                    title: "Blur sensitive clips",
+                                    subtitle: "Hide detected secrets in the panel until revealed",
+                                    isOn: $settings.blurSensitiveClips
+                                )
+                            }
+                        }
+
+                        Divider()
+                            .background(Color.white.opacity(0.1))
+
+                        SettingsToggleRow(
+                            title: "Apple Intelligence",
+                            subtitle: "Generate titles, summaries, and rewrites (\(AIEnrichmentStore.shared.appleIntelligenceAvailability.message))",
+                            isOn: $settings.appleIntelligenceEnabled
+                        )
+                    }
+
                     // Privacy Section
                     SettingsSection(title: "Privacy") {
                         SettingsToggleRow(

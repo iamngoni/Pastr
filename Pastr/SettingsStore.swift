@@ -51,6 +51,11 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) }
     }
 
+    /// Last app version for which the "What's New" sheet was shown. Empty until first set.
+    @Published var lastSeenVersion: String {
+        didSet { defaults.set(lastSeenVersion, forKey: Keys.lastSeenVersion) }
+    }
+
     @Published var iCloudSyncEnabled: Bool {
         didSet { defaults.set(iCloudSyncEnabled, forKey: Keys.iCloudSyncEnabled) }
     }
@@ -107,6 +112,42 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(displaySize.rawValue, forKey: Keys.displaySize) }
     }
 
+    // MARK: - On-device Intelligence (Tier 1)
+
+    /// Master switch for all deterministic on-device enrichment (OCR, classification,
+    /// sensitivity, embeddings).
+    @Published var aiEnrichmentEnabled: Bool {
+        didSet { defaults.set(aiEnrichmentEnabled, forKey: Keys.aiEnrichmentEnabled) }
+    }
+
+    @Published var ocrEnabled: Bool {
+        didSet { defaults.set(ocrEnabled, forKey: Keys.ocrEnabled) }
+    }
+
+    @Published var semanticSearchEnabled: Bool {
+        didSet { defaults.set(semanticSearchEnabled, forKey: Keys.semanticSearchEnabled) }
+    }
+
+    @Published var autoTaggingEnabled: Bool {
+        didSet { defaults.set(autoTaggingEnabled, forKey: Keys.autoTaggingEnabled) }
+    }
+
+    @Published var sensitiveDataDetectionEnabled: Bool {
+        didSet { defaults.set(sensitiveDataDetectionEnabled, forKey: Keys.sensitiveDataDetectionEnabled) }
+    }
+
+    /// Visually blur clips detected as sensitive until revealed.
+    @Published var blurSensitiveClips: Bool {
+        didSet { defaults.set(blurSensitiveClips, forKey: Keys.blurSensitiveClips) }
+    }
+
+    // MARK: - Apple Intelligence (Tier 2)
+
+    /// Master switch for Apple Intelligence features (titles, summaries, transforms).
+    @Published var appleIntelligenceEnabled: Bool {
+        didSet { defaults.set(appleIntelligenceEnabled, forKey: Keys.appleIntelligenceEnabled) }
+    }
+
     private let defaults = UserDefaults.standard
 
     private init() {
@@ -151,6 +192,8 @@ final class SettingsStore: ObservableObject {
 
         hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)
 
+        lastSeenVersion = defaults.string(forKey: Keys.lastSeenVersion) ?? ""
+
         iCloudSyncEnabled = defaults.bool(forKey: Keys.iCloudSyncEnabled)
 
         launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
@@ -194,6 +237,29 @@ final class SettingsStore: ObservableObject {
         } else {
             displaySize = .auto
         }
+
+        // On-device Intelligence (Tier 1) - default on (fully local, privacy-safe)
+        let storedAIEnrichment = defaults.object(forKey: Keys.aiEnrichmentEnabled)
+        aiEnrichmentEnabled = storedAIEnrichment == nil ? true : defaults.bool(forKey: Keys.aiEnrichmentEnabled)
+
+        let storedOCR = defaults.object(forKey: Keys.ocrEnabled)
+        ocrEnabled = storedOCR == nil ? true : defaults.bool(forKey: Keys.ocrEnabled)
+
+        let storedSemantic = defaults.object(forKey: Keys.semanticSearchEnabled)
+        semanticSearchEnabled = storedSemantic == nil ? true : defaults.bool(forKey: Keys.semanticSearchEnabled)
+
+        // Auto-tagging off by default to avoid surprising users with new tags.
+        autoTaggingEnabled = defaults.bool(forKey: Keys.autoTaggingEnabled)
+
+        let storedSensitive = defaults.object(forKey: Keys.sensitiveDataDetectionEnabled)
+        sensitiveDataDetectionEnabled = storedSensitive == nil ? true : defaults.bool(forKey: Keys.sensitiveDataDetectionEnabled)
+
+        let storedBlur = defaults.object(forKey: Keys.blurSensitiveClips)
+        blurSensitiveClips = storedBlur == nil ? true : defaults.bool(forKey: Keys.blurSensitiveClips)
+
+        // Apple Intelligence (Tier 2) - default on; gated by hardware/OS availability at use.
+        let storedAppleIntelligence = defaults.object(forKey: Keys.appleIntelligenceEnabled)
+        appleIntelligenceEnabled = storedAppleIntelligence == nil ? true : defaults.bool(forKey: Keys.appleIntelligenceEnabled)
     }
 
     private enum Keys {
@@ -208,6 +274,7 @@ final class SettingsStore: ObservableObject {
         static let hotCorner = "hotCorner"
         static let hotCornerDelay = "hotCornerDelay"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let lastSeenVersion = "lastSeenVersion"
         static let iCloudSyncEnabled = "iCloudSyncEnabled"
         static let launchAtLogin = "launchAtLogin"
         static let playSoundEffects = "playSoundEffects"
@@ -222,6 +289,14 @@ final class SettingsStore: ObservableObject {
         static let ignoreTransientContent = "ignoreTransientContent"
         static let ignoredAppBundleIds = "ignoredAppBundleIds"
         static let displaySize = "displaySize"
+        // Intelligence
+        static let aiEnrichmentEnabled = "aiEnrichmentEnabled"
+        static let ocrEnabled = "ocrEnabled"
+        static let semanticSearchEnabled = "semanticSearchEnabled"
+        static let autoTaggingEnabled = "autoTaggingEnabled"
+        static let sensitiveDataDetectionEnabled = "sensitiveDataDetectionEnabled"
+        static let blurSensitiveClips = "blurSensitiveClips"
+        static let appleIntelligenceEnabled = "appleIntelligenceEnabled"
     }
 
     // MARK: - Ignored Apps Management

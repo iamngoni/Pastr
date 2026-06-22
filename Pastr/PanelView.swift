@@ -6,6 +6,8 @@ struct PanelView: View {
     @ObservedObject private var collectionStore = CollectionStore.shared
     @ObservedObject private var tagStore = TagStore.shared
     @ObservedObject private var historyStore = ClipboardHistoryStore.shared
+    @ObservedObject private var settings = SettingsStore.shared
+    @StateObject private var ai = PanelAIController()
     let onSelect: (ClipboardItem) -> Void
     let onTogglePin: (ClipboardItem) -> Void
     let onCopy: (ClipboardItem) -> Void
@@ -59,6 +61,14 @@ struct PanelView: View {
             .padding(16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) {
+            if let banner = ai.banner {
+                aiBanner(banner)
+                    .padding(.bottom, 20)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: ai.banner)
         .sheet(isPresented: $viewModel.showingCreateCollection) {
             CreateCollectionSheet(collectionStore: collectionStore) { newCollection in
                 viewModel.selectedSection = .collection(newCollection.id)
@@ -385,6 +395,8 @@ struct PanelView: View {
         }
         .keyboardShortcut("c", modifiers: .command)
 
+        aiMenu(for: item)
+
         Divider()
 
         // Delete
@@ -511,6 +523,102 @@ struct PanelView: View {
         }
     }
 
+    // MARK: - Intelligence menu
+
+    @ViewBuilder
+    private func aiMenu(for item: ClipboardItem) -> some View {
+        let enrichment = AIEnrichmentStore.shared
+        let hasOCRText = enrichment.searchableText(for: item.fingerprint) != nil
+        let hasText = item.plainText != nil || hasOCRText
+        let hasSuggestions = !enrichment.tagSuggestions(for: item.fingerprint).isEmpty
+        let aiOn = settings.appleIntelligenceEnabled
+        let aiAvailable = ai.appleIntelligenceAvailable
+
+        let showsAnything = (settings.aiEnrichmentEnabled && (hasOCRText || hasSuggestions))
+            || (aiOn && hasText)
+
+        if showsAnything {
+            Divider()
+
+            if settings.aiEnrichmentEnabled && hasOCRText {
+                Button {
+                    ai.copyRecognizedText(item)
+                } label: {
+                    Label("Copy Recognized Text", systemImage: "text.viewfinder")
+                }
+            }
+
+            if settings.aiEnrichmentEnabled && hasSuggestions {
+                Button {
+                    ai.applySuggestedTags(item)
+                } label: {
+                    Label("Apply Suggested Tags", systemImage: "tag.fill")
+                }
+            }
+
+            if aiOn && hasText {
+                Menu {
+                    if aiAvailable {
+                        Button {
+                            ai.generateTitle(for: item)
+                        } label: {
+                            Label("Generate Title", systemImage: "textformat")
+                        }
+                        Button {
+                            ai.summarize(item)
+                        } label: {
+                            Label("Summarize", systemImage: "text.append")
+                        }
+                        Divider()
+                        Menu {
+                            ForEach(TextTransform.allCases) { transform in
+                                Button {
+                                    ai.transform(item, transform)
+                                } label: {
+                                    Label(transform.label, systemImage: transform.systemImage)
+                                }
+                            }
+                        } label: {
+                            Label("Paste As…", systemImage: "sparkles")
+                        }
+                    } else {
+                        Text(AIEnrichmentStore.shared.appleIntelligenceAvailability.message)
+                    }
+                } label: {
+                    Label("Apple Intelligence", systemImage: "sparkles")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func aiBanner(_ banner: PanelAIController.Banner) -> some View {
+        HStack(spacing: 8) {
+            switch banner.kind {
+            case .progress:
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.white)
+            case .success:
+                Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+            case .error:
+                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+            }
+            Text(banner.message)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule(style: .continuous).strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+        )
+        .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+    }
+
     private func shareItem(_ item: ClipboardItem) {
         let content: Any
         if let text = item.textContent {
@@ -549,6 +657,13 @@ private struct ClipboardCardView: View {
     @ObservedObject private var collectionStore = CollectionStore.shared
     @ObservedObject private var tagStore = TagStore.shared
     @ObservedObject private var settings = SettingsStore.shared
+    @ObservedObject private var enrichmentStore = AIEnrichmentStore.shared
+    @State private var revealed = false
+
+    /// True when the clip looks sensitive and should be blurred until revealed.
+    private var isRedacted: Bool {
+        enrichmentStore.shouldRedact(item) && !revealed
+    }
 
     private var itemCollections: [Collection] {
         collectionStore.collections(containing: item.fingerprint)
@@ -659,6 +774,26 @@ private struct ClipboardCardView: View {
                             .font(.system(size: displaySize.baseFontSize))
                             .foregroundColor(.white)
                             .lineLimit(3)
+                    }
+                }
+                .blur(radius: isRedacted ? 10 : 0)
+                .overlay {
+                    if isRedacted {
+                        Button {
+                            revealed = true
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: "eye.slash.fill")
+                                    .font(.system(size: 14 * displaySize.scaleFactor))
+                                Text("Sensitive — click to reveal")
+                                    .font(.system(size: 9 * displaySize.scaleFactor, weight: .medium))
+                                    .multilineTextAlignment(.center)
+                            }
+                            .foregroundColor(.white.opacity(0.85))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 

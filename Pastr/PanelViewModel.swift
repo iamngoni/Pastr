@@ -16,6 +16,7 @@ final class PanelViewModel: ObservableObject {
     private let historyStore: ClipboardHistoryStore
     private let collectionStore = CollectionStore.shared
     private let settings = SettingsStore.shared
+    private let enrichmentStore = AIEnrichmentStore.shared
     private var previewSource: PreviewSource?
     private var hoverWorkItem: DispatchWorkItem?
     private var cancellables = Set<AnyCancellable>()
@@ -62,7 +63,8 @@ final class PanelViewModel: ObservableObject {
             result = baseItems
         } else {
             let query = searchText.lowercased()
-            result = baseItems.filter { item in
+            // Exact/substring matches across clip text, metadata and OCR'd image text.
+            var literalMatches = baseItems.filter { item in
                 if let text = item.textContent?.lowercased(), text.contains(query) {
                     return true
                 }
@@ -78,8 +80,25 @@ final class PanelViewModel: ObservableObject {
                 if item.fileURLs.contains(where: { $0.lastPathComponent.lowercased().contains(query) }) {
                     return true
                 }
+                if let ocr = enrichmentStore.searchableText(for: item.fingerprint)?.lowercased(),
+                   ocr.contains(query) {
+                    return true
+                }
                 return false
             }
+
+            // Semantic ("search by meaning") matches appended after literal hits, ranked by
+            // similarity and de-duplicated. Only kicks in when enabled and available.
+            let literalIds = Set(literalMatches.map { $0.id })
+            let semantic = enrichmentStore.semanticMatches(for: searchText, among: baseItems)
+            if !semantic.isEmpty {
+                let byFingerprint = Dictionary(baseItems.map { ($0.fingerprint, $0) }, uniquingKeysWith: { a, _ in a })
+                for match in semantic {
+                    guard let item = byFingerprint[match.fingerprint], !literalIds.contains(item.id) else { continue }
+                    literalMatches.append(item)
+                }
+            }
+            result = literalMatches
         }
 
         cachedFilteredItems = result

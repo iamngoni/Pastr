@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let pinnedStore = PinnedStore.shared
     private let pasteQueue = PasteQueue.shared
     private var onboardingController: OnboardingWindowController?
+    private var whatsNewController: WhatsNewWindowController?
     private var settingsWindow: NSWindow?
     private let clipboardActions = ClipboardActions()
     private var cancellables = Set<AnyCancellable>()
@@ -102,7 +103,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !settingsStore.hasCompletedOnboarding {
             showOnboarding()
+        } else {
+            showWhatsNewIfNeeded()
         }
+    }
+
+    private var currentAppVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+    }
+
+    /// Show the "What's New" sheet once after the app updates to a new version.
+    private func showWhatsNewIfNeeded() {
+        let current = currentAppVersion
+        guard !current.isEmpty, settingsStore.lastSeenVersion != current else { return }
+
+        let controller = WhatsNewWindowController(version: current) { [weak self] in
+            self?.settingsStore.lastSeenVersion = current
+        }
+        whatsNewController = controller
+        controller.showWindow(nil)
+        controller.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func bindSettings() {
@@ -159,7 +180,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showOnboarding() {
         let controller = OnboardingWindowController { [weak self] in
-            self?.settingsStore.hasCompletedOnboarding = true
+            guard let self else { return }
+            self.settingsStore.hasCompletedOnboarding = true
+            // New users start onboarded onto the current version, so they skip "What's New".
+            self.settingsStore.lastSeenVersion = self.currentAppVersion
         }
         onboardingController = controller
         controller.showWindow(nil)

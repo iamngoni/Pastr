@@ -20,12 +20,15 @@ final class ClipboardHistoryStore: ObservableObject {
     private let persistence = HistoryPersistence()
     private let pinnedStore = PinnedStore.shared
     private let collectionStore = CollectionStore.shared
+    private let enrichmentStore = AIEnrichmentStore.shared
     private var cancellables = Set<AnyCancellable>()
 
     init() {
         items = persistence.load()
         bindSettings()
         migrateToCollections()
+        // Enrich any clips loaded from disk that don't yet have on-device intelligence.
+        enrichmentStore.backfill(items)
     }
 
     /// Migrate from isPinned to collections system
@@ -53,6 +56,8 @@ final class ClipboardHistoryStore: ObservableObject {
         persistence.save(items)
         syncUpsert(itemToPersist)
         syncRemove(removed)
+        enrichmentStore.enrich(itemToPersist)
+        removed.forEach { enrichmentStore.remove(fingerprint: $0.fingerprint) }
         SoundManager.playCopySound()
     }
 
@@ -146,12 +151,14 @@ final class ClipboardHistoryStore: ObservableObject {
         items.removeAll { !$0.isPinned }
         persistence.save(items)
         syncRemove(removed)
+        enrichmentStore.prune(keeping: Set(items.map { $0.fingerprint }))
     }
 
     func delete(_ item: ClipboardItem) {
         syncRemove([item])
         items.removeAll { $0.id == item.id }
         persistence.save(items)
+        pruneEnrichmentIfOrphaned(item.fingerprint)
     }
 
     func delete(_ itemsToDelete: [ClipboardItem]) {
@@ -159,6 +166,13 @@ final class ClipboardHistoryStore: ObservableObject {
         syncRemove(itemsToDelete)
         items.removeAll { idsToDelete.contains($0.id) }
         persistence.save(items)
+        itemsToDelete.forEach { pruneEnrichmentIfOrphaned($0.fingerprint) }
+    }
+
+    /// Remove enrichment for a fingerprint only if no remaining clip uses it.
+    private func pruneEnrichmentIfOrphaned(_ fingerprint: String) {
+        guard !items.contains(where: { $0.fingerprint == fingerprint }) else { return }
+        enrichmentStore.remove(fingerprint: fingerprint)
     }
 
     func mergeCloudItems(_ cloudItems: [ClipboardItem]) {

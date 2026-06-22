@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.3 (2026-06-20)
+On-device intelligence — everything runs locally; your clipboard never leaves your Mac.
+
+**Tier 1 — works on every supported Mac (macOS 14+):**
+- Recognize text in image clips with on-device OCR, making screenshots searchable and copyable.
+- Search clips by meaning, not just exact text, using on-device sentence embeddings.
+- Automatic content classification (code, link, email, command, JSON, color, …) with optional auto-tagging.
+- Sensitive-content detection for API keys, passwords, private keys, and card numbers, with optional blur-until-revealed in the panel.
+
+**Tier 2 — Apple Intelligence (macOS 26+ on supported hardware, with graceful fallback):**
+- Generate a short title for any clip.
+- Summarize long clips.
+- "Paste As…" transforms: clean up grammar, rewrite professionally/friendlier, make concise, bullet points, Markdown, JSON, extract action items, translate to English.
+
+**Settings:**
+- New Intelligence section with granular on/off controls for every feature and a live Apple Intelligence availability status.
+
 ## v1.2 (2026-01-14)
 - Removed in-app update checks for Mac App Store distribution.
 - Added "Maximum items" setting in History section (500, 1k, 5k, 10k, Unlimited). Default is Unlimited.

@@ -10,13 +10,15 @@ A lightweight macOS clipboard manager that lives in your menu bar. Pastr tracks 
 - **Tags & collections** — organise clipboard items your way
 - **Backup & restore** — export your history with optional encryption
 - **Syntax highlighting** — code snippets render with highlight
+- **On-device intelligence** — OCR on image clips, search-by-meaning, automatic classification/tagging, and sensitive-content detection — all processed locally
+- **Apple Intelligence** — generate titles, summarise clips, and "Paste As…" transforms (clean up, rewrite, Markdown, JSON, translate) on supported hardware (macOS 26+)
 - **Hotkey customisation** — change the activation shortcut in Settings
 - **Hot corners** — optionally open the panel by moving the cursor to a screen corner
 
 ## Requirements
 
 - macOS 14 (Sonoma) or later
-- Xcode 15 or later (for building from source)
+- Xcode 15 or later (for building from source; Xcode 26 / macOS 26 SDK required to build the Apple Intelligence features)
 
 ## Building
 
@@ -58,12 +60,15 @@ Pastr/
 ├── HotKeyManager.swift        # Global hotkey registration
 ├── SettingsStore.swift        # User preferences
 ├── SettingsView.swift         # Settings UI
+├── Intelligence/              # On-device AI (OCR, embeddings, classifier, Apple Intelligence)
 └── ...
 ```
 
 ## Data & privacy
 
 Pastr stores clipboard history locally using Core Data. Pinned items can optionally sync to iCloud via CloudKit — everything else stays on-device. No analytics are collected beyond opt-in crash reporting (Sentry).
+
+All intelligence features run **entirely on-device** — OCR (Vision), search-by-meaning and classification (NaturalLanguage), and Apple Intelligence (FoundationModels). Clip contents are never sent to any server, and enrichment data (`ai-enrichment.json`) is stored locally and never synced.
 
 ## License
 
