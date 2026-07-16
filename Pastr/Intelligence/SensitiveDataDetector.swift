@@ -21,14 +21,9 @@ enum SensitiveDataDetector {
         // Private key blocks.
         if text.contains("BEGIN") && text.contains("PRIVATE KEY") { return true }
 
-        // Common API-key / token prefixes (Stripe, GitHub, OpenAI, AWS, Slack, Google).
-        let secretPrefixes = [
-            "sk-", "sk_live_", "sk_test_", "pk_live_", "rk_live_",
-            "ghp_", "gho_", "ghu_", "ghs_", "github_pat_",
-            "xox", "AKIA", "ASIA", "AIza", "ya29.",
-            "Bearer ", "glpat-", "npm_",
-        ]
-        for prefix in secretPrefixes where text.contains(prefix) {
+        // Common API-key / token formats. Keep these shape-based so short fragments like
+        // "task-" do not trip the OpenAI/Stripe "sk-" prefix.
+        if containsKnownSecretToken(text) {
             return true
         }
 
@@ -37,11 +32,10 @@ enum SensitiveDataDetector {
             return true
         }
 
-        // High-entropy single token (e.g. a 32+ char hex/base64 secret) with no spaces.
+        // High-entropy single token with no spaces.
         let firstToken = text.split(whereSeparator: { $0.isWhitespace }).first.map(String.init) ?? text
         if !text.contains(where: { $0.isWhitespace }),
-           firstToken.count >= 32,
-           isHighEntropyToken(firstToken) {
+           looksLikeStandaloneSecretToken(firstToken) {
             return true
         }
 
@@ -74,6 +68,24 @@ enum SensitiveDataDetector {
 
     // MARK: - Helpers
 
+    private static func containsKnownSecretToken(_ text: String) -> Bool {
+        let patterns = [
+            #"\bsk-[A-Za-z0-9_-]{20,}\b"#,
+            #"\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9_]{12,}\b"#,
+            #"\b(?:ghp|gho|ghu|ghs)_[A-Za-z0-9]{20,}\b"#,
+            #"\bgithub_pat_[A-Za-z0-9_]{20,}\b"#,
+            #"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"#,
+            #"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"#,
+            #"\bAIza[0-9A-Za-z_-]{20,}\b"#,
+            #"\bya29\.[0-9A-Za-z_-]{20,}\b"#,
+            #"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}\b"#,
+            #"\bglpat-[A-Za-z0-9_-]{20,}\b"#,
+            #"\bnpm_[A-Za-z0-9]{20,}\b"#
+        ]
+
+        return patterns.contains { matches(text, pattern: $0, caseInsensitive: true) }
+    }
+
     private static func firstCardCandidate(in text: String) -> String? {
         // 13–19 digits, optionally separated by spaces or dashes.
         guard let regex = try? NSRegularExpression(pattern: #"\b(?:\d[ -]?){13,19}\b"#) else { return nil }
@@ -98,17 +110,23 @@ enum SensitiveDataDetector {
         return sum % 10 == 0
     }
 
-    /// Rough Shannon-entropy gate: high-entropy tokens mix character classes and don't look
-    /// like ordinary words.
-    private static func isHighEntropyToken(_ token: String) -> Bool {
+    /// Rough high-entropy gate for standalone pasted tokens. This intentionally ignores
+    /// UUIDs, hashes, and shorter mixed identifiers that show up frequently in screenshots.
+    private static func looksLikeStandaloneSecretToken(_ token: String) -> Bool {
+        guard token.count >= 40, token.count <= 512 else { return false }
+        if matches(token, pattern: #"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"#, caseInsensitive: true) {
+            return false
+        }
+
         let hasLower = token.contains(where: { $0.isLowercase })
         let hasUpper = token.contains(where: { $0.isUppercase })
         let hasDigit = token.contains(where: { $0.isNumber })
-        let classes = [hasLower, hasUpper, hasDigit].filter { $0 }.count
-        // Require at least two character classes and an alphabet that isn't all letters.
-        guard classes >= 2 else { return false }
+        let hasSecretSymbol = token.contains { "_-./+=".contains($0) }
+        let classes = [hasLower, hasUpper, hasDigit, hasSecretSymbol].filter { $0 }.count
+        guard classes >= 3 else { return false }
+
         let digitRatio = Double(token.filter(\.isNumber).count) / Double(token.count)
-        return digitRatio > 0.1 || classes >= 3
+        return digitRatio > 0.1 || hasSecretSymbol
     }
 
     private static func matches(_ text: String, pattern: String, caseInsensitive: Bool = false) -> Bool {

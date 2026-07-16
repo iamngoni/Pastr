@@ -51,6 +51,12 @@ final class HotKeyRecorderField: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+        }
+    }
+
     override func layout() {
         super.layout()
         label.frame = bounds

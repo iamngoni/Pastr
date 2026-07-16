@@ -4,42 +4,46 @@ import AppKit
 final class AppIconCache {
     static let shared = AppIconCache()
 
-    private var cache: [String: NSImage] = [:]
-    private let cacheQueue = DispatchQueue(label: "com.pastr.icon-cache", attributes: .concurrent)
     private let loadQueue = DispatchQueue(label: "com.pastr.icon-load", qos: .userInitiated)
+    private let cache = NSCache<NSString, NSImage>()
+    private let stateLock = NSLock()
+    private var inFlightCompletions: [String: [(NSImage?) -> Void]] = [:]
 
-    private init() {}
+    private init() {
+        cache.countLimit = 256
+        cache.totalCostLimit = 32 * 1024 * 1024
+    }
 
     /// Returns cached icon synchronously, or nil if not cached yet
     func cachedIcon(for bundleId: String) -> NSImage? {
-        cacheQueue.sync {
-            cache[bundleId]
-        }
+        cache.object(forKey: bundleId as NSString)
     }
 
     /// Loads icon asynchronously, using cache if available
     func icon(for bundleId: String, completion: @escaping (NSImage?) -> Void) {
-        // Check cache first
         if let cached = cachedIcon(for: bundleId) {
             completion(cached)
             return
         }
 
-        // Load on background thread
+        stateLock.lock()
+        if inFlightCompletions[bundleId] != nil {
+            inFlightCompletions[bundleId]?.append(completion)
+            stateLock.unlock()
+            return
+        }
+        inFlightCompletions[bundleId] = [completion]
+        stateLock.unlock()
+
         loadQueue.async { [weak self] in
             guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
-                DispatchQueue.main.async { completion(nil) }
+                self?.completeLoad(for: bundleId, icon: nil)
                 return
             }
 
             let icon = NSWorkspace.shared.icon(forFile: appURL.path)
-
-            // Cache the icon
-            self?.cacheQueue.async(flags: .barrier) {
-                self?.cache[bundleId] = icon
-            }
-
-            DispatchQueue.main.async { completion(icon) }
+            self?.cache.setObject(icon, forKey: bundleId as NSString)
+            self?.completeLoad(for: bundleId, icon: icon)
         }
     }
 
@@ -51,8 +55,16 @@ final class AppIconCache {
 
     /// Clears the cache
     func clearCache() {
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            self?.cache.removeAll()
+        cache.removeAllObjects()
+    }
+
+    private func completeLoad(for bundleId: String, icon: NSImage?) {
+        stateLock.lock()
+        let completions = inFlightCompletions.removeValue(forKey: bundleId) ?? []
+        stateLock.unlock()
+
+        DispatchQueue.main.async {
+            completions.forEach { $0(icon) }
         }
     }
 }

@@ -9,6 +9,7 @@ struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var historyStore: ClipboardHistoryStore
     @ObservedObject private var tagStore = TagStore.shared
+    @ObservedObject private var enrichmentStore = AIEnrichmentStore.shared
     let hotKeyManager: HotKeyManager
 
     @State private var showClearHistoryAlert = false
@@ -143,14 +144,6 @@ struct SettingsView: View {
                                 subtitle: "Flag API keys, passwords, and card numbers",
                                 isOn: $settings.sensitiveDataDetectionEnabled
                             )
-
-                            if settings.sensitiveDataDetectionEnabled {
-                                SettingsToggleRow(
-                                    title: "Blur sensitive clips",
-                                    subtitle: "Hide detected secrets in the panel until revealed",
-                                    isOn: $settings.blurSensitiveClips
-                                )
-                            }
                         }
 
                         Divider()
@@ -158,7 +151,7 @@ struct SettingsView: View {
 
                         SettingsToggleRow(
                             title: "Apple Intelligence",
-                            subtitle: "Generate titles, summaries, and rewrites (\(AIEnrichmentStore.shared.appleIntelligenceAvailability.message))",
+                            subtitle: "Generate titles, summaries, and rewrites (\(enrichmentStore.appleIntelligenceAvailability.message))",
                             isOn: $settings.appleIntelligenceEnabled
                         )
                     }
@@ -554,8 +547,7 @@ struct SettingsView: View {
         presentOpenPanel(panel) { url in
             guard let url else { return }
             do {
-                let data = try Data(contentsOf: url)
-                if backupManager.isEncryptedBackup(data) {
+                if try backupManager.isEncryptedBackup(at: url) {
                     pendingRestoreURL = url
                     passwordPromptMode = .restore
                     showPasswordPrompt = true
@@ -869,6 +861,8 @@ struct AppPickerView: View {
     @Binding var isPresented: Bool
     @State private var searchText = ""
     @State private var installedApps: [AppInfo] = []
+    @State private var isLoadingApps = false
+    private static let appLoadQueue = DispatchQueue(label: "pastr.settings.app-loader", qos: .userInitiated)
 
     struct AppInfo: Identifiable, Hashable {
         let id = UUID()
@@ -995,7 +989,10 @@ struct AppPickerView: View {
     }
 
     private func loadInstalledApps() {
-        DispatchQueue.global(qos: .userInitiated).async {
+        guard installedApps.isEmpty, !isLoadingApps else { return }
+        isLoadingApps = true
+
+        Self.appLoadQueue.async {
             var apps: [AppInfo] = []
 
             let appDirectories = [
@@ -1010,22 +1007,24 @@ struct AppPickerView: View {
                 else { continue }
 
                 for item in contents where item.hasSuffix(".app") {
-                    let appPath = (directory as NSString).appendingPathComponent(item)
-                    let bundlePath = (appPath as NSString).appendingPathComponent(
-                        "Contents/Info.plist")
+                    autoreleasepool {
+                        let appPath = (directory as NSString).appendingPathComponent(item)
+                        let bundlePath = (appPath as NSString).appendingPathComponent(
+                            "Contents/Info.plist")
 
-                    guard let plist = NSDictionary(contentsOfFile: bundlePath),
-                        let bundleId = plist["CFBundleIdentifier"] as? String
-                    else { continue }
+                        guard let plist = NSDictionary(contentsOfFile: bundlePath),
+                              let bundleId = plist["CFBundleIdentifier"] as? String
+                        else { return }
 
-                    let appName =
-                        (plist["CFBundleDisplayName"] as? String)
-                        ?? (plist["CFBundleName"] as? String)
-                        ?? (item as NSString).deletingPathExtension
+                        let appName =
+                            (plist["CFBundleDisplayName"] as? String)
+                            ?? (plist["CFBundleName"] as? String)
+                            ?? (item as NSString).deletingPathExtension
 
-                    let icon = NSWorkspace.shared.icon(forFile: appPath)
+                        let icon = NSWorkspace.shared.icon(forFile: appPath)
 
-                    apps.append(AppInfo(bundleId: bundleId, name: appName, icon: icon))
+                        apps.append(AppInfo(bundleId: bundleId, name: appName, icon: icon))
+                    }
                 }
             }
 
@@ -1038,6 +1037,7 @@ struct AppPickerView: View {
 
             DispatchQueue.main.async {
                 self.installedApps = apps
+                self.isLoadingApps = false
             }
         }
     }

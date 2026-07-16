@@ -148,6 +148,7 @@ private struct TagData: Codable {
 
 private final class TagPersistence {
     private let fileURL: URL
+    private let queue = DispatchQueue(label: "pastr.tags.persistence", qos: .utility)
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -158,7 +159,7 @@ private final class TagPersistence {
 
     func load() -> (tags: [Tag], itemTags: [String: Set<UUID>]) {
         guard FileManager.default.fileExists(atPath: fileURL.path),
-              let data = try? Data(contentsOf: fileURL),
+              let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
               let tagData = try? JSONDecoder().decode(TagData.self, from: data) else {
             return ([], [:])
         }
@@ -166,9 +167,10 @@ private final class TagPersistence {
     }
 
     func save(tags: [Tag], itemTags: [String: Set<UUID>]) {
-        DispatchQueue.global(qos: .utility).async { [fileURL] in
-            let tagData = TagData(tags: tags, itemTags: itemTags)
-            guard let data = try? JSONEncoder().encode(tagData) else { return }
+        let tagData = TagData(tags: tags, itemTags: itemTags)
+        guard let data = try? JSONEncoder().encode(tagData) else { return }
+
+        queue.async { [fileURL] in
             try? data.write(to: fileURL, options: .atomic)
         }
     }

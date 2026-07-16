@@ -8,10 +8,26 @@ final class LinkPreviewService: ObservableObject {
 
     @Published private(set) var previews: [String: LinkPreview] = [:]
     private var inFlightRequests: Set<String> = []
+    private var metadataTasks: [String: Task<Void, Never>] = [:]
     private let cache = NSCache<NSString, LinkPreview>()
+    private let session: URLSession
+    private let maxPreviewCount = 200
+    private let maxInFlightRequests = 6
+    private let maxImageBytes = 4 * 1024 * 1024
 
     private init() {
         cache.countLimit = 200
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 8
+        configuration.timeoutIntervalForResource = 12
+        configuration.httpMaximumConnectionsPerHost = 2
+        configuration.urlCache = URLCache(memoryCapacity: 4 * 1024 * 1024, diskCapacity: 0)
+        session = URLSession(configuration: configuration)
+    }
+
+    deinit {
+        metadataTasks.values.forEach { $0.cancel() }
+        session.invalidateAndCancel()
     }
 
     func preview(for urlString: String) -> LinkPreview? {
@@ -32,11 +48,13 @@ final class LinkPreviewService: ObservableObject {
             )
             DispatchQueue.main.async {
                 self.previews[urlString] = basicPreview
+                self.trimPreviewsIfNeeded()
             }
             return
         }
 
         guard !inFlightRequests.contains(urlString),
+              inFlightRequests.count < maxInFlightRequests,
               previews[urlString] == nil,
               cache.object(forKey: urlString as NSString) == nil,
               let url = normalizedURL(from: urlString) else {
@@ -53,14 +71,17 @@ final class LinkPreviewService: ObservableObject {
         )
         DispatchQueue.main.async {
             self.previews[urlString] = initialPreview
+            self.trimPreviewsIfNeeded()
         }
 
         // Use OpenGraph library to fetch metadata
-        Task {
+        metadataTasks[urlString] = Task { [weak self] in
+            guard let self else { return }
             do {
                 let og = try await OpenGraph.fetch(url: url)
                 await MainActor.run {
                     self.inFlightRequests.remove(urlString)
+                    self.metadataTasks[urlString] = nil
 
                     let preview = LinkPreview(
                         url: urlString,
@@ -68,6 +89,7 @@ final class LinkPreviewService: ObservableObject {
                         siteName: og[.siteName] ?? self.extractDomain(from: urlString)
                     )
                     self.previews[urlString] = preview
+                    self.trimPreviewsIfNeeded()
 
                     // Fetch the OG image
                     if let imageURLString = og[.image], let imageURL = URL(string: imageURLString) {
@@ -80,6 +102,7 @@ final class LinkPreviewService: ObservableObject {
             } catch {
                 await MainActor.run {
                     self.inFlightRequests.remove(urlString)
+                    self.metadataTasks[urlString] = nil
                     // Keep the initial preview with just the domain
                     self.fetchFavicon(for: url, urlString: urlString)
                 }
@@ -94,8 +117,11 @@ final class LinkPreviewService: ObservableObject {
             forHTTPHeaderField: "User-Agent"
         )
 
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self = self, let data = data, let image = NSImage(data: data) else { return }
+        session.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self,
+                  let data = data,
+                  data.count <= self.maxImageBytes,
+                  let image = NSImage(data: data) else { return }
             self.updatePreview(urlString: urlString, image: image, isIcon: isIcon)
         }.resume()
     }
@@ -124,10 +150,10 @@ final class LinkPreviewService: ObservableObject {
             forHTTPHeaderField: "User-Agent"
         )
 
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        session.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else { return }
 
-            if let data = data, let image = NSImage(data: data), image.size.width > 0 {
+            if let data = data, data.count <= self.maxImageBytes, let image = NSImage(data: data), image.size.width > 0 {
                 self.updatePreview(urlString: urlString, image: image, isIcon: true)
             } else {
                 // Try next favicon URL
@@ -146,8 +172,17 @@ final class LinkPreviewService: ObservableObject {
                     preview.image = image
                 }
                 self.previews[urlString] = preview
+                self.trimPreviewsIfNeeded()
                 self.cache.setObject(preview, forKey: urlString as NSString)
             }
+        }
+    }
+
+    private func trimPreviewsIfNeeded() {
+        guard previews.count > maxPreviewCount else { return }
+        let overflow = previews.count - maxPreviewCount
+        for key in previews.keys.prefix(overflow) {
+            previews.removeValue(forKey: key)
         }
     }
 

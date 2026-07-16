@@ -36,7 +36,7 @@ final class HotKeyManager {
         // Set up event handler if not already done
         setupEventHandler()
 
-        var hotKeyID = EventHotKeyID(signature: fourCharCode("PSTR"), id: 1)
+        let hotKeyID = EventHotKeyID(signature: fourCharCode("PSTR"), id: 1)
         RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
     }
 
@@ -46,7 +46,7 @@ final class HotKeyManager {
         // Set up event handler if not already done
         setupEventHandler()
 
-        var hotKeyID = EventHotKeyID(signature: fourCharCode("PSTQ"), id: 2)
+        let hotKeyID = EventHotKeyID(signature: fourCharCode("PSTQ"), id: 2)
         RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &queueHotKeyRef)
     }
 

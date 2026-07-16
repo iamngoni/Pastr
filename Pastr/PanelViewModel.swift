@@ -3,15 +3,16 @@ import Foundation
 
 final class PanelViewModel: ObservableObject {
     @Published var selectedSection: PanelSection = .history {
-        didSet { invalidateFilteredItems() }
+        didSet { searchCriteriaDidChange() }
     }
     @Published var selectedIndex: Int = 0
     @Published var searchText: String = "" {
-        didSet { invalidateFilteredItems() }
+        didSet { searchCriteriaDidChange() }
     }
     @Published var selectedItemIds: Set<UUID> = []
     @Published private(set) var previewItem: ClipboardItem?
     @Published var showingCreateCollection: Bool = false
+    @Published private var semanticMatchFingerprints: [String] = []
 
     private let historyStore: ClipboardHistoryStore
     private let collectionStore = CollectionStore.shared
@@ -19,32 +20,91 @@ final class PanelViewModel: ObservableObject {
     private let enrichmentStore = AIEnrichmentStore.shared
     private var previewSource: PreviewSource?
     private var hoverWorkItem: DispatchWorkItem?
+    private var semanticSearchTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
 
     /// Cached filtered items to avoid recomputing on every access during layout
     private var cachedFilteredItems: [ClipboardItem]?
     private var cachedSearchText: String = ""
     private var cachedSection: PanelSection = .history
+    private var semanticResultQuery = ""
+    private var semanticResultSection: PanelSection = .history
 
     init(historyStore: ClipboardHistoryStore) {
         self.historyStore = historyStore
         // Invalidate cache when history changes
         historyStore.$items
             .sink { [weak self] _ in
-                self?.invalidateFilteredItems()
+                self?.searchSourceDidChange()
             }
             .store(in: &cancellables)
 
         // Invalidate cache when collections change
         collectionStore.$collections
             .sink { [weak self] _ in
-                self?.invalidateFilteredItems()
+                self?.searchSourceDidChange()
+            }
+            .store(in: &cancellables)
+
+        enrichmentStore.$enrichments
+            .sink { [weak self] _ in
+                self?.searchSourceDidChange()
+            }
+            .store(in: &cancellables)
+
+        settings.$semanticSearchEnabled
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                self?.searchSourceDidChange()
             }
             .store(in: &cancellables)
     }
 
+    deinit {
+        hoverWorkItem?.cancel()
+        semanticSearchTask?.cancel()
+    }
+
     private func invalidateFilteredItems() {
         cachedFilteredItems = nil
+    }
+
+    private func searchCriteriaDidChange() {
+        invalidateFilteredItems()
+        scheduleSemanticSearch()
+    }
+
+    private func searchSourceDidChange() {
+        invalidateFilteredItems()
+        scheduleSemanticSearch()
+    }
+
+    private func scheduleSemanticSearch() {
+        semanticSearchTask?.cancel()
+        semanticSearchTask = nil
+        semanticMatchFingerprints = []
+        semanticResultQuery = ""
+
+        let query = searchText
+        let section = selectedSection
+        guard settings.semanticSearchEnabled,
+              query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3 else {
+            return
+        }
+        let baseItems = historyStore.items(for: section)
+
+        semanticSearchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard let self, !Task.isCancelled else { return }
+            let matches = await self.enrichmentStore.semanticMatches(for: query, among: baseItems)
+            guard !Task.isCancelled,
+                  self.searchText == query,
+                  self.selectedSection == section else { return }
+            self.semanticResultQuery = query
+            self.semanticResultSection = section
+            self.semanticMatchFingerprints = matches.map(\.fingerprint)
+            self.invalidateFilteredItems()
+        }
     }
 
     var items: [ClipboardItem] {
@@ -62,26 +122,25 @@ final class PanelViewModel: ObservableObject {
         if searchText.isEmpty {
             result = baseItems
         } else {
-            let query = searchText.lowercased()
+            let query = searchText
             // Exact/substring matches across clip text, metadata and OCR'd image text.
             var literalMatches = baseItems.filter { item in
-                if let text = item.textContent?.lowercased(), text.contains(query) {
+                if item.textContent?.localizedCaseInsensitiveContains(query) == true {
                     return true
                 }
-                if let url = item.urlString?.lowercased(), url.contains(query) {
+                if item.urlString?.localizedCaseInsensitiveContains(query) == true {
                     return true
                 }
-                if let title = item.pinnedTitle?.lowercased(), title.contains(query) {
+                if item.pinnedTitle?.localizedCaseInsensitiveContains(query) == true {
                     return true
                 }
-                if let appName = item.sourceAppName?.lowercased(), appName.contains(query) {
+                if item.sourceAppName?.localizedCaseInsensitiveContains(query) == true {
                     return true
                 }
-                if item.fileURLs.contains(where: { $0.lastPathComponent.lowercased().contains(query) }) {
+                if item.fileURLs.contains(where: { $0.lastPathComponent.localizedCaseInsensitiveContains(query) }) {
                     return true
                 }
-                if let ocr = enrichmentStore.searchableText(for: item.fingerprint)?.lowercased(),
-                   ocr.contains(query) {
+                if enrichmentStore.searchableText(for: item.fingerprint)?.localizedCaseInsensitiveContains(query) == true {
                     return true
                 }
                 return false
@@ -90,11 +149,12 @@ final class PanelViewModel: ObservableObject {
             // Semantic ("search by meaning") matches appended after literal hits, ranked by
             // similarity and de-duplicated. Only kicks in when enabled and available.
             let literalIds = Set(literalMatches.map { $0.id })
-            let semantic = enrichmentStore.semanticMatches(for: searchText, among: baseItems)
-            if !semantic.isEmpty {
+            if semanticResultQuery == searchText,
+               semanticResultSection == selectedSection,
+               !semanticMatchFingerprints.isEmpty {
                 let byFingerprint = Dictionary(baseItems.map { ($0.fingerprint, $0) }, uniquingKeysWith: { a, _ in a })
-                for match in semantic {
-                    guard let item = byFingerprint[match.fingerprint], !literalIds.contains(item.id) else { continue }
+                for fingerprint in semanticMatchFingerprints {
+                    guard let item = byFingerprint[fingerprint], !literalIds.contains(item.id) else { continue }
                     literalMatches.append(item)
                 }
             }
@@ -126,7 +186,7 @@ final class PanelViewModel: ObservableObject {
 
     func isSelected(_ item: ClipboardItem) -> Bool {
         if selectedItemIds.isEmpty {
-            return items.firstIndex(where: { $0.id == item.id }) == selectedIndex
+            return selectedItem?.id == item.id
         }
         return selectedItemIds.contains(item.id)
     }

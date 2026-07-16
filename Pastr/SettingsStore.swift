@@ -136,11 +136,6 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(sensitiveDataDetectionEnabled, forKey: Keys.sensitiveDataDetectionEnabled) }
     }
 
-    /// Visually blur clips detected as sensitive until revealed.
-    @Published var blurSensitiveClips: Bool {
-        didSet { defaults.set(blurSensitiveClips, forKey: Keys.blurSensitiveClips) }
-    }
-
     // MARK: - Apple Intelligence (Tier 2)
 
     /// Master switch for Apple Intelligence features (titles, summaries, transforms).
@@ -254,9 +249,6 @@ final class SettingsStore: ObservableObject {
         let storedSensitive = defaults.object(forKey: Keys.sensitiveDataDetectionEnabled)
         sensitiveDataDetectionEnabled = storedSensitive == nil ? true : defaults.bool(forKey: Keys.sensitiveDataDetectionEnabled)
 
-        let storedBlur = defaults.object(forKey: Keys.blurSensitiveClips)
-        blurSensitiveClips = storedBlur == nil ? true : defaults.bool(forKey: Keys.blurSensitiveClips)
-
         // Apple Intelligence (Tier 2) - default on; gated by hardware/OS availability at use.
         let storedAppleIntelligence = defaults.object(forKey: Keys.appleIntelligenceEnabled)
         appleIntelligenceEnabled = storedAppleIntelligence == nil ? true : defaults.bool(forKey: Keys.appleIntelligenceEnabled)
@@ -295,7 +287,6 @@ final class SettingsStore: ObservableObject {
         static let semanticSearchEnabled = "semanticSearchEnabled"
         static let autoTaggingEnabled = "autoTaggingEnabled"
         static let sensitiveDataDetectionEnabled = "sensitiveDataDetectionEnabled"
-        static let blurSensitiveClips = "blurSensitiveClips"
         static let appleIntelligenceEnabled = "appleIntelligenceEnabled"
     }
 

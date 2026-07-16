@@ -163,6 +163,7 @@ final class CollectionStore: ObservableObject {
 
 private final class CollectionPersistence {
     private let fileURL: URL
+    private let queue = DispatchQueue(label: "pastr.collections.persistence", qos: .utility)
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -173,7 +174,7 @@ private final class CollectionPersistence {
 
     func load() -> [Collection] {
         guard FileManager.default.fileExists(atPath: fileURL.path),
-              let data = try? Data(contentsOf: fileURL),
+              let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
               let collections = try? JSONDecoder().decode([Collection].self, from: data) else {
             return []
         }
@@ -181,7 +182,7 @@ private final class CollectionPersistence {
     }
 
     func save(_ collections: [Collection]) {
-        DispatchQueue.global(qos: .utility).async { [fileURL] in
+        queue.async { [fileURL] in
             guard let data = try? JSONEncoder().encode(collections) else { return }
             try? data.write(to: fileURL, options: .atomic)
         }

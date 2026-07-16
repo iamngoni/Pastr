@@ -7,6 +7,7 @@ struct PanelView: View {
     @ObservedObject private var tagStore = TagStore.shared
     @ObservedObject private var historyStore = ClipboardHistoryStore.shared
     @ObservedObject private var settings = SettingsStore.shared
+    @ObservedObject private var enrichmentStore = AIEnrichmentStore.shared
     @StateObject private var ai = PanelAIController()
     let onSelect: (ClipboardItem) -> Void
     let onTogglePin: (ClipboardItem) -> Void
@@ -527,10 +528,9 @@ struct PanelView: View {
 
     @ViewBuilder
     private func aiMenu(for item: ClipboardItem) -> some View {
-        let enrichment = AIEnrichmentStore.shared
-        let hasOCRText = enrichment.searchableText(for: item.fingerprint) != nil
+        let hasOCRText = enrichmentStore.searchableText(for: item.fingerprint) != nil
         let hasText = item.plainText != nil || hasOCRText
-        let hasSuggestions = !enrichment.tagSuggestions(for: item.fingerprint).isEmpty
+        let hasSuggestions = !enrichmentStore.tagSuggestions(for: item.fingerprint).isEmpty
         let aiOn = settings.appleIntelligenceEnabled
         let aiAvailable = ai.appleIntelligenceAvailable
 
@@ -582,7 +582,7 @@ struct PanelView: View {
                             Label("Paste As…", systemImage: "sparkles")
                         }
                     } else {
-                        Text(AIEnrichmentStore.shared.appleIntelligenceAvailability.message)
+                        Text(enrichmentStore.appleIntelligenceAvailability.message)
                     }
                 } label: {
                     Label("Apple Intelligence", systemImage: "sparkles")
@@ -657,13 +657,6 @@ private struct ClipboardCardView: View {
     @ObservedObject private var collectionStore = CollectionStore.shared
     @ObservedObject private var tagStore = TagStore.shared
     @ObservedObject private var settings = SettingsStore.shared
-    @ObservedObject private var enrichmentStore = AIEnrichmentStore.shared
-    @State private var revealed = false
-
-    /// True when the clip looks sensitive and should be blurred until revealed.
-    private var isRedacted: Bool {
-        enrichmentStore.shouldRedact(item) && !revealed
-    }
 
     private var itemCollections: [Collection] {
         collectionStore.collections(containing: item.fingerprint)
@@ -746,23 +739,18 @@ private struct ClipboardCardView: View {
                                 .foregroundColor(.white.opacity(0.7))
                         }
                     case .richText:
-                        if let attributed = item.attributedPreview {
-                            Text(attributed)
-                                .font(.system(size: displaySize.baseFontSize - 2))
-                                .lineLimit(10)
-                        } else {
-                            Text(item.previewText)
-                                .font(.system(size: displaySize.baseFontSize - 2))
+                        Text(item.cardPreviewText)
+                            .font(.system(size: displaySize.baseFontSize - 2))
+                            .foregroundColor(.white)
+                            .lineLimit(10)
+                    case .text, .other:
+                        if SyntaxHighlighter.isLikelyCode(item.cardPreviewText) {
+                            Text(item.cardPreviewText)
+                                .font(.system(size: displaySize.baseFontSize - 2, weight: .regular, design: .monospaced))
                                 .foregroundColor(.white)
                                 .lineLimit(10)
-                        }
-                    case .text, .other:
-                        if SyntaxHighlighter.isLikelyCode(item.previewText) {
-                            Text(SyntaxHighlighter.highlightedAttributedString(item.previewText))
-                                .font(.system(size: displaySize.baseFontSize - 2, weight: .regular, design: .monospaced))
-                                .lineLimit(10)
                         } else {
-                            Text(item.previewText)
+                            Text(item.cardPreviewText)
                                 .font(.system(size: displaySize.baseFontSize))
                                 .foregroundColor(.white)
                                 .lineLimit(6)
@@ -770,30 +758,10 @@ private struct ClipboardCardView: View {
                     case .link:
                         LinkPreviewCard(urlString: item.urlString ?? item.previewText)
                     case .file:
-                        Text(item.previewText)
+                        Text(item.cardPreviewText)
                             .font(.system(size: displaySize.baseFontSize))
                             .foregroundColor(.white)
                             .lineLimit(3)
-                    }
-                }
-                .blur(radius: isRedacted ? 10 : 0)
-                .overlay {
-                    if isRedacted {
-                        Button {
-                            revealed = true
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "eye.slash.fill")
-                                    .font(.system(size: 14 * displaySize.scaleFactor))
-                                Text("Sensitive — click to reveal")
-                                    .font(.system(size: 9 * displaySize.scaleFactor, weight: .medium))
-                                    .multilineTextAlignment(.center)
-                            }
-                            .foregroundColor(.white.opacity(0.85))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
 
@@ -1113,24 +1081,18 @@ private struct ClipboardPreviewView: View {
                     }
                 case .richText:
                     ScrollView {
-                        if let attributed = item.attributedPreview {
-                            Text(attributed)
-                                .font(.system(size: 12))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
-                            Text(item.previewText)
-                                .font(.system(size: 12))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                        Text(item.detailPreviewText)
+                            .font(.system(size: 12))
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 case .text, .other:
                     ScrollView {
-                        if SyntaxHighlighter.isLikelyCode(item.previewText) {
-                            Text(SyntaxHighlighter.highlightedAttributedString(item.previewText))
+                        if SyntaxHighlighter.isLikelyCode(item.detailPreviewText) {
+                            Text(item.detailPreviewText)
                                 .font(.system(size: 12, design: .monospaced))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         } else {
-                            Text(item.previewText)
+                            Text(item.detailPreviewText)
                                 .font(.system(size: 12))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -1145,7 +1107,7 @@ private struct ClipboardPreviewView: View {
                                 .clipped()
                                 .cornerRadius(8)
                         }
-                        Text(preview?.title ?? item.previewText)
+                        Text(preview?.title ?? item.cardPreviewText)
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(2)
                         if let urlString = item.urlString {

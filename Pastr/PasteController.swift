@@ -39,7 +39,7 @@ final class ClipboardWriter {
         guard let targetApp = previousApp else { return }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            targetApp.activate(options: [.activateIgnoringOtherApps])
+            targetApp.activate(options: [])
         }
     }
 }

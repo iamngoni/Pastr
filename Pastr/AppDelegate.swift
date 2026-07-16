@@ -3,30 +3,64 @@ import Combine
 import Sentry
 import SwiftUI
 
+enum SentryBootstrap {
+    private static let startOnce: Void = {
+        let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || Bundle.allBundles.contains { $0.bundlePath.hasSuffix(".xctest") }
+        guard !isRunningTests else { return }
+
+        SentrySDK.start { options in
+            options.dsn = "https://47a5a589a8006e54c4ea2b8de115b482@o1107818.ingest.us.sentry.io/4510679814307840"
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+            options.releaseName = "\(version)+\(build)"
+            options.dist = build
+            options.enableAppHangTracking = true
+            options.appHangTimeoutInterval = 2
+            options.enableWatchdogTerminationTracking = true
+            options.sendDefaultPii = false
+#if DEBUG
+            options.environment = "development"
+            options.debug = true
+#else
+            options.environment = "production"
+#endif
+        }
+        SentrySDK.configureScope { scope in
+            scope.setTag(value: "macOS", key: "app.platform")
+        }
+    }()
+
+    static func start() {
+        _ = startOnce
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
-    private let hotKeyManager = HotKeyManager.shared
-    private let hotCornerMonitor = HotCornerMonitor.shared
+    private lazy var hotKeyManager = HotKeyManager.shared
+    private lazy var hotCornerMonitor = HotCornerMonitor.shared
     private var panelWindowController: PanelWindowController?
     private var clipboardMonitor: ClipboardMonitor?
     private var clipboardWriter: ClipboardWriter?
-    private let historyStore = ClipboardHistoryStore.shared
-    private let settingsStore = SettingsStore.shared
-    private let pinnedStore = PinnedStore.shared
-    private let pasteQueue = PasteQueue.shared
+    private lazy var historyStore = ClipboardHistoryStore.shared
+    private lazy var settingsStore = SettingsStore.shared
+    private lazy var pinnedStore = PinnedStore.shared
+    private lazy var pasteQueue = PasteQueue.shared
     private var onboardingController: OnboardingWindowController?
     private var whatsNewController: WhatsNewWindowController?
     private var settingsWindow: NSWindow?
     private let clipboardActions = ClipboardActions()
     private var cancellables = Set<AnyCancellable>()
 
+    override init() {
+        super.init()
+        // All service singletons above are lazy so monitoring starts before persistence,
+        // CloudKit, pasteboard, model, or window initialization can fail or hang.
+        SentryBootstrap.start()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        SentrySDK.start { options in
-            options.dsn = "https://47a5a589a8006e54c4ea2b8de115b482@o1107818.ingest.us.sentry.io/4510679814307840"
-#if DEBUG
-            options.debug = true
-#endif
-        }
 
         NSApp.setActivationPolicy(.accessory)
 
@@ -93,10 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotCornerMonitor.start()
 
         if settingsStore.iCloudSyncEnabled {
-            if let cloudItems = try? pinnedStore.fetchAll() {
-                historyStore.mergeCloudItems(cloudItems)
-            }
-            historyStore.syncAllToCloud()
+            historyStore.syncNow()
         }
 
         bindSettings()
@@ -145,6 +176,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyManager.unregisterHotKey()
         hotCornerMonitor.stop()
         clipboardMonitor?.stop()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        AIEnrichmentStore.shared.refreshAppleIntelligenceAvailability()
     }
 
     private func togglePanel() {

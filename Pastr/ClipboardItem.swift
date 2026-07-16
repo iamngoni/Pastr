@@ -1,7 +1,10 @@
 import AppKit
 import Foundation
 
-struct ClipboardItem: Identifiable, Hashable {
+struct ClipboardItem: Identifiable, nonisolated Hashable {
+    static let cardPreviewCharacterLimit = 2_000
+    static let detailPreviewCharacterLimit = 20_000
+
     let id: UUID
     let createdAt: Date
     let type: ClipboardItemType
@@ -17,6 +20,40 @@ struct ClipboardItem: Identifiable, Hashable {
     let typesData: [NSPasteboard.PasteboardType: Data]
     let fingerprint: String
 
+    static func == (lhs: ClipboardItem, rhs: ClipboardItem) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.createdAt == rhs.createdAt &&
+        lhs.type == rhs.type &&
+        lhs.textContent?.count == rhs.textContent?.count &&
+        lhs.rtfData?.count == rhs.rtfData?.count &&
+        lhs.imageData?.count == rhs.imageData?.count &&
+        lhs.urlString == rhs.urlString &&
+        lhs.fileURLs == rhs.fileURLs &&
+        lhs.sourceAppBundleId == rhs.sourceAppBundleId &&
+        lhs.sourceAppName == rhs.sourceAppName &&
+        lhs.isPinned == rhs.isPinned &&
+        lhs.pinnedTitle == rhs.pinnedTitle &&
+        lhs.typesData.count == rhs.typesData.count &&
+        lhs.fingerprint == rhs.fingerprint
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(createdAt)
+        hasher.combine(type)
+        hasher.combine(textContent?.count)
+        hasher.combine(rtfData?.count)
+        hasher.combine(imageData?.count)
+        hasher.combine(urlString)
+        hasher.combine(fileURLs)
+        hasher.combine(sourceAppBundleId)
+        hasher.combine(sourceAppName)
+        hasher.combine(isPinned)
+        hasher.combine(pinnedTitle)
+        hasher.combine(typesData.count)
+        hasher.combine(fingerprint)
+    }
+
     var previewText: String {
         if let pinnedTitle, !pinnedTitle.isEmpty {
             return pinnedTitle
@@ -31,6 +68,17 @@ struct ClipboardItem: Identifiable, Hashable {
             return fileURLs.map { $0.lastPathComponent }.joined(separator: ", ")
         }
         return type.label
+    }
+
+    /// A bounded display-only value for cards. The original payload remains available through
+    /// `textContent`, `plainText`, and `write(to:)` so preview safety never truncates a copy.
+    var cardPreviewText: String {
+        Self.boundedPreview(previewText, limit: Self.cardPreviewCharacterLimit)
+    }
+
+    /// A larger, still bounded display-only value for the quick-preview panel.
+    var detailPreviewText: String {
+        Self.boundedPreview(previewText, limit: Self.detailPreviewCharacterLimit)
     }
 
     var plainText: String? {
@@ -57,7 +105,7 @@ struct ClipboardItem: Identifiable, Hashable {
 
     var image: NSImage? {
         guard let imageData else { return nil }
-        return NSImage(data: imageData)
+        return ClipboardImageCache.shared.image(for: fingerprint, data: imageData)
     }
 
     var sourceAppIcon: NSImage? {
@@ -83,11 +131,17 @@ struct ClipboardItem: Identifiable, Hashable {
         if let textContent {
             item.setString(textContent, forType: .string)
         }
+        if let rtfData {
+            item.setData(rtfData, forType: .rtf)
+        }
         if let urlString {
             item.setString(urlString, forType: .URL)
         }
 
         var objects: [NSPasteboardWriting] = [item]
+        if let imageData, let image = ClipboardImageCache.shared.image(for: fingerprint, data: imageData) {
+            objects.append(image)
+        }
         if !fileURLs.isEmpty {
             objects.append(contentsOf: fileURLs.map { $0 as NSURL })
         }
@@ -121,6 +175,42 @@ struct ClipboardItem: Identifiable, Hashable {
         }
 
         return provider
+    }
+
+    private static func boundedPreview(_ text: String, limit: Int) -> String {
+        guard let end = text.index(text.startIndex, offsetBy: limit, limitedBy: text.endIndex),
+              end != text.endIndex else { return text }
+        return String(text[..<end]) + "\n…"
+    }
+}
+
+final class ClipboardImageCache {
+    static let shared = ClipboardImageCache()
+
+    private let cache = NSCache<NSString, NSImage>()
+
+    private init() {
+        cache.countLimit = 200
+        cache.totalCostLimit = 80 * 1024 * 1024
+    }
+
+    func image(for fingerprint: String, data: Data) -> NSImage? {
+        let key = fingerprint as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+
+        guard let image = NSImage(data: data) else { return nil }
+        cache.setObject(image, forKey: key, cost: data.count)
+        return image
+    }
+
+    func removeImage(for fingerprint: String) {
+        cache.removeObject(forKey: fingerprint as NSString)
+    }
+
+    func clearCache() {
+        cache.removeAllObjects()
     }
 }
 
