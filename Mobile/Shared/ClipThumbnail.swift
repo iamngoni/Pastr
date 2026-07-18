@@ -6,7 +6,7 @@ struct ClipThumbnail: View {
 
     var body: some View {
         if let imageData = clip.imageData,
-           let image = UIImage(data: imageData) {
+           let image = PastrClipImageCache.shared.image(for: clip.fingerprint, data: imageData) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -50,5 +50,27 @@ struct ClipThumbnail: View {
                         .foregroundStyle(PastrTheme.tint(clip.tintName))
                 )
         }
+    }
+}
+
+private final class PastrClipImageCache {
+    static let shared = PastrClipImageCache()
+
+    private let cache = NSCache<NSString, UIImage>()
+
+    private init() {
+        cache.countLimit = 160
+        cache.totalCostLimit = 64 * 1024 * 1024
+    }
+
+    func image(for fingerprint: String, data: Data) -> UIImage? {
+        let key = fingerprint as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+
+        guard let image = UIImage(data: data) else { return nil }
+        cache.setObject(image, forKey: key, cost: data.count)
+        return image
     }
 }

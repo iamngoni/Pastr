@@ -5,6 +5,8 @@ import FoundationModels
 /// gate so the rest of the app (deployment target macOS 14) can reason about it.
 enum AppleIntelligenceAvailability: Equatable {
     case available
+    /// The availability probe is running away from the main thread.
+    case checking
     /// OS is older than macOS 26 — the framework isn't present at all.
     case unsupportedOS
     /// Hardware can't run Apple Intelligence.
@@ -20,6 +22,7 @@ enum AppleIntelligenceAvailability: Equatable {
     var message: String {
         switch self {
         case .available: return "Apple Intelligence is ready."
+        case .checking: return "Checking Apple Intelligence availability…"
         case .unsupportedOS: return "Requires macOS 26 or later."
         case .deviceNotEligible: return "This Mac doesn't support Apple Intelligence."
         case .notEnabled: return "Turn on Apple Intelligence in System Settings."
@@ -50,7 +53,16 @@ enum AppleIntelligenceService {
     /// Upper bound on characters fed to the model to keep latency and context in check.
     private static let maxInputCharacters = 6000
 
-    static var availability: AppleIntelligenceAvailability {
+    /// FoundationModels may synchronously coordinate with the main thread while resolving
+    /// model state. Always run the probe on a detached task so SwiftUI rendering never waits
+    /// inside the framework (which can otherwise deadlock with its worker thread).
+    static func availability() async -> AppleIntelligenceAvailability {
+        await Task.detached(priority: .utility) {
+            currentAvailability()
+        }.value
+    }
+
+    nonisolated private static func currentAvailability() -> AppleIntelligenceAvailability {
         guard #available(macOS 26.0, *) else { return .unsupportedOS }
         switch SystemLanguageModel.default.availability {
         case .available:
@@ -66,8 +78,6 @@ enum AppleIntelligenceService {
             return .unknown
         }
     }
-
-    static var isAvailable: Bool { availability.isAvailable }
 
     /// Generate a short (≤ 5 word) title for a clip.
     static func generateTitle(for text: String) async throws -> String {
@@ -99,7 +109,7 @@ enum AppleIntelligenceService {
     }
 
     private static func respond(instructions: String, prompt: String) async throws -> String {
-        let current = availability
+        let current = await availability()
         guard current.isAvailable else { throw AppleIntelligenceError.unavailable(current) }
         guard #available(macOS 26.0, *) else { throw AppleIntelligenceError.unavailable(.unsupportedOS) }
 

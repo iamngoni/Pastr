@@ -27,6 +27,7 @@ struct PastrKeyboardView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedClipId: PastrClip.ID?
     @State private var actionMessage: String?
+    @State private var clearMessageTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -68,6 +69,9 @@ struct PastrKeyboardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, 8)
         .background(keyboardBackground)
+        .onDisappear {
+            clearMessageTask?.cancel()
+        }
     }
 
     private var toolbar: some View {
@@ -133,7 +137,10 @@ struct PastrKeyboardView: View {
     }
 
     private func clearActionMessage() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+        clearMessageTask?.cancel()
+        clearMessageTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.16)) {
                 actionMessage = nil
             }

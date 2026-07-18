@@ -2,12 +2,17 @@ import Foundation
 import Vision
 import CoreGraphics
 import AppKit
+import ImageIO
 
 /// Extracts text from image clips using on-device Vision OCR. Works on macOS 14+.
 enum OCRService {
+    private static let maxImageBytes = 25 * 1024 * 1024
+    private static let maxRecognitionPixelDimension = 2_048
+
     /// Recognise text in image data. Returns `nil` if nothing legible is found.
     /// Runs synchronously on the calling (background) queue.
     static func recognizeText(in imageData: Data) -> String? {
+        guard imageData.count <= maxImageBytes else { return nil }
         guard let cgImage = cgImage(from: imageData) else { return nil }
 
         let request = VNRecognizeTextRequest()
@@ -31,14 +36,13 @@ enum OCRService {
     }
 
     private static func cgImage(from data: Data) -> CGImage? {
-        if let bitmap = NSBitmapImageRep(data: data),
-           let cg = bitmap.cgImage {
-            return cg
-        }
-        if let image = NSImage(data: data) {
-            var rect = CGRect(origin: .zero, size: image.size)
-            return image.cgImage(forProposedRect: &rect, context: nil, hints: nil)
-        }
-        return nil
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxRecognitionPixelDimension
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }

@@ -27,7 +27,7 @@ final class BackupManager {
     }
 
     func restoreBackup(from url: URL, password: String?) throws -> [ClipboardItem] {
-        let data = try Data(contentsOf: url)
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
         if isEncryptedBackup(data) {
             guard let password, !password.isEmpty else {
                 throw BackupError.passwordRequired
@@ -40,6 +40,12 @@ final class BackupManager {
 
     func isEncryptedBackup(_ data: Data) -> Bool {
         data.starts(with: BackupCrypto.magic)
+    }
+
+    func isEncryptedBackup(at url: URL) throws -> Bool {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        return handle.readData(ofLength: BackupCrypto.magic.count) == BackupCrypto.magic
     }
 
     private func csvString(from items: [ClipboardItem]) -> String {

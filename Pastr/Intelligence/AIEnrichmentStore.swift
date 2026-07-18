@@ -12,12 +12,26 @@ final class AIEnrichmentStore: ObservableObject {
     /// Enrichment keyed by clip fingerprint.
     @Published private(set) var enrichments: [String: AIEnrichment] = [:]
 
+    /// Cached model state for synchronous UI reads. The FoundationModels probe that updates
+    /// this value always runs away from the main thread.
+    @Published private(set) var appleIntelligenceAvailability: AppleIntelligenceAvailability = .checking
+
     private let settings = SettingsStore.shared
     private let persistence = AIEnrichmentPersistence()
     private let queue = DispatchQueue(label: "pastr.ai.enrichment", qos: .utility)
+    private var availabilityTask: Task<Void, Never>?
 
     private init() {
         enrichments = persistence.load()
+        if #available(macOS 26.0, *) {
+            refreshAppleIntelligenceAvailability()
+        } else {
+            appleIntelligenceAvailability = .unsupportedOS
+        }
+    }
+
+    deinit {
+        availabilityTask?.cancel()
     }
 
     // MARK: - Lookup
@@ -41,13 +55,6 @@ final class AIEnrichmentStore: ObservableObject {
 
     func tagSuggestions(for fingerprint: String) -> [String] {
         enrichments[fingerprint]?.tagSuggestions ?? []
-    }
-
-    /// True if a clip should be visually protected because it looks sensitive and the user
-    /// asked us to blur such clips.
-    func shouldRedact(_ item: ClipboardItem) -> Bool {
-        guard settings.blurSensitiveClips else { return false }
-        return sensitivity(for: item.fingerprint).isSensitive
     }
 
     // MARK: - Tier 1 pipeline
@@ -154,26 +161,55 @@ final class AIEnrichmentStore: ObservableObject {
 
     /// Rank clips by semantic similarity to `query`. Returns fingerprint→score for clips
     /// above the match threshold, best first.
-    func semanticMatches(for query: String, among items: [ClipboardItem]) -> [(fingerprint: String, score: Float)] {
-        guard settings.semanticSearchEnabled, SemanticIndex.isAvailable,
-              query.trimmingCharacters(in: .whitespaces).count >= 3,
-              let queryVector = SemanticIndex.embedQuery(query) else { return [] }
+    func semanticMatches(for query: String, among items: [ClipboardItem]) async -> [(fingerprint: String, score: Float)] {
+        guard settings.semanticSearchEnabled,
+              query.trimmingCharacters(in: .whitespaces).count >= 3 else { return [] }
 
-        var scored: [(String, Float)] = []
-        for item in items {
-            guard let vector = enrichments[item.fingerprint]?.embedding else { continue }
-            let score = SemanticIndex.similarity(queryVector, vector)
-            if score >= SemanticIndex.matchThreshold {
-                scored.append((item.fingerprint, score))
-            }
+        // Capture only value types before leaving the main actor. No ClipboardItem, Core Data,
+        // or ObservableObject state is touched by the detached scoring work.
+        let vectors = items.compactMap { item -> (fingerprint: String, vector: [Float])? in
+            guard let vector = enrichments[item.fingerprint]?.embedding else { return nil }
+            return (item.fingerprint, vector)
         }
-        return scored.sorted { $0.1 > $1.1 }.map { (fingerprint: $0.0, score: $0.1) }
+
+        return await Task.detached(priority: .userInitiated) {
+            guard !Task.isCancelled,
+                  let queryVector = SemanticIndex.embedQuery(query) else { return [] }
+
+            var scored: [(fingerprint: String, score: Float)] = []
+            scored.reserveCapacity(vectors.count)
+            for (fingerprint, vector) in vectors {
+                guard !Task.isCancelled else { return [] }
+                let score = SemanticIndex.similarity(queryVector, vector)
+                if score >= SemanticIndex.matchThreshold {
+                    scored.append((fingerprint, score))
+                }
+            }
+            return scored.sorted { $0.score > $1.score }
+        }.value
     }
 
     // MARK: - Tier 2 (Apple Intelligence)
 
-    var appleIntelligenceAvailability: AppleIntelligenceAvailability {
-        AppleIntelligenceService.availability
+    /// Refresh the cached FoundationModels status without blocking the caller or SwiftUI.
+    func refreshAppleIntelligenceAvailability() {
+        guard #available(macOS 26.0, *) else {
+            appleIntelligenceAvailability = .unsupportedOS
+            return
+        }
+        guard availabilityTask == nil else { return }
+
+        appleIntelligenceAvailability = .checking
+        availabilityTask = Task { [weak self] in
+            let availability = await AppleIntelligenceService.availability()
+            await MainActor.run {
+                guard let self else { return }
+                if !Task.isCancelled {
+                    self.appleIntelligenceAvailability = availability
+                }
+                self.availabilityTask = nil
+            }
+        }
     }
 
     /// Generate and cache a title for a clip.
@@ -183,7 +219,7 @@ final class AIEnrichmentStore: ObservableObject {
             throw AppleIntelligenceError.emptyInput
         }
         let title = try await AppleIntelligenceService.generateTitle(for: text)
-        await update(item.fingerprint) { $0.generatedTitle = title }
+        update(item.fingerprint) { $0.generatedTitle = title }
         return title
     }
 
@@ -194,7 +230,7 @@ final class AIEnrichmentStore: ObservableObject {
             throw AppleIntelligenceError.emptyInput
         }
         let summary = try await AppleIntelligenceService.summarize(text)
-        await update(item.fingerprint) { $0.summary = summary }
+        update(item.fingerprint) { $0.summary = summary }
         return summary
     }
 
@@ -257,8 +293,12 @@ private struct SettingsSnapshot {
 
 // MARK: - Persistence
 
-private struct AIEnrichmentPersistence {
+private final class AIEnrichmentPersistence {
     private let fileURL: URL
+    private let queue = DispatchQueue(label: "pastr.ai-enrichment.persistence", qos: .utility)
+    private let stateLock = NSLock()
+    private var pendingRecords: [AIEnrichment]?
+    private var writerIsRunning = false
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -268,7 +308,7 @@ private struct AIEnrichmentPersistence {
     }
 
     func load() -> [String: AIEnrichment] {
-        guard let data = try? Data(contentsOf: fileURL),
+        guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
               let records = try? JSONDecoder().decode([AIEnrichment].self, from: data) else {
             return [:]
         }
@@ -277,9 +317,35 @@ private struct AIEnrichmentPersistence {
 
     func save(_ enrichments: [String: AIEnrichment]) {
         let records = Array(enrichments.values)
-        DispatchQueue.global(qos: .utility).async { [fileURL] in
-            guard let data = try? JSONEncoder().encode(records) else { return }
-            try? data.write(to: fileURL, options: .atomic)
+        stateLock.lock()
+        pendingRecords = records
+        guard !writerIsRunning else {
+            stateLock.unlock()
+            return
+        }
+        writerIsRunning = true
+        stateLock.unlock()
+
+        queue.async { [weak self] in
+            self?.drainPendingSaves()
+        }
+    }
+
+    private func drainPendingSaves() {
+        while true {
+            stateLock.lock()
+            guard let records = pendingRecords else {
+                writerIsRunning = false
+                stateLock.unlock()
+                return
+            }
+            pendingRecords = nil
+            stateLock.unlock()
+
+            autoreleasepool {
+                guard let data = try? JSONEncoder().encode(records) else { return }
+                try? data.write(to: fileURL, options: .atomic)
+            }
         }
     }
 }

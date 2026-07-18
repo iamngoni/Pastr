@@ -19,6 +19,12 @@ final class PanelAIController: ObservableObject {
     private let history = ClipboardHistoryStore.shared
     private let tagStore = TagStore.shared
     private var dismissTask: Task<Void, Never>?
+    private var actionTask: Task<Void, Never>?
+
+    deinit {
+        dismissTask?.cancel()
+        actionTask?.cancel()
+    }
 
     // MARK: - Tier 1 actions
 
@@ -83,7 +89,8 @@ final class PanelAIController: ObservableObject {
 
     private func run(_ progress: String, _ work: @escaping () async throws -> String) {
         show(progress, kind: .progress, autoDismiss: false)
-        Task { [weak self] in
+        actionTask?.cancel()
+        actionTask = Task { [weak self] in
             do {
                 let message = try await work()
                 self?.show(message, kind: .success)

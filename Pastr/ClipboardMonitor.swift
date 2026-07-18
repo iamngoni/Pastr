@@ -1,11 +1,12 @@
 import AppKit
+import ImageIO
 
 final class ClipboardMonitor {
     private let historyStore: ClipboardHistoryStore
     private let settingsStore = SettingsStore.shared
     private let pasteQueue = PasteQueue.shared
     private let pasteboard = NSPasteboard.general
-    private var changeCount: Int
+    private var changeCount: Int?
     private var timer: DispatchSourceTimer?
     private let monitorQueue = DispatchQueue(label: "com.pastr.clipboard-monitor", qos: .userInitiated)
 
@@ -23,9 +24,20 @@ final class ClipboardMonitor {
         NSPasteboard.PasteboardType("de.petermaurer.TransientPasteboardType")
     ]
 
+    private static let imageTypes: Set<NSPasteboard.PasteboardType> = [.tiff, .png, .pdf]
+    private static let explicitStoredTypes: Set<NSPasteboard.PasteboardType> = [.string, .rtf, .URL, .tiff, .png, .pdf]
+    private static let maxStoredRepresentationBytes = 2 * 1024 * 1024
+    private static let maxStoredRepresentationsTotalBytes = 8 * 1024 * 1024
+    private static let maxCapturedImageBytes = 25 * 1024 * 1024
+    private static let maxNormalizedImageBytes = 8 * 1024 * 1024
+    private static let maxImagePixelDimension = 2_048
+
     init(historyStore: ClipboardHistoryStore) {
         self.historyStore = historyStore
-        changeCount = pasteboard.changeCount
+    }
+
+    deinit {
+        stop()
     }
 
     func start() {
@@ -45,9 +57,18 @@ final class ClipboardMonitor {
     }
 
     private func pollPasteboard() {
-        guard pasteboard.changeCount != changeCount else { return }
-        changeCount = pasteboard.changeCount
-        capturePasteboardItem()
+        let currentChangeCount = pasteboard.changeCount
+        guard let previousChangeCount = changeCount else {
+            // Establish the baseline on the monitor queue. Reading NSPasteboard during app
+            // construction can synchronously wait on pboard/XPC and stall launch.
+            changeCount = currentChangeCount
+            return
+        }
+        guard currentChangeCount != previousChangeCount else { return }
+        changeCount = currentChangeCount
+        autoreleasepool {
+            capturePasteboardItem()
+        }
     }
 
     private func capturePasteboardItem() {
@@ -215,39 +236,15 @@ final class ClipboardMonitor {
         sourceBundleId: String?,
         sourceName: String?
     ) -> ClipboardItem {
-        let types = item.types
-        var typesData: [NSPasteboard.PasteboardType: Data] = [:]
-        for type in types {
-            if let data = item.data(forType: type) {
-                typesData[type] = data
-            } else if let string = item.string(forType: type) {
-                typesData[type] = string.data(using: .utf8)
-            }
-        }
-
         let textContent = item.string(forType: .string)
         let rtfData = item.data(forType: .rtf)
 
-        // Try multiple image formats - apps use different ones
-        var imageData: Data?
-        if let tiffData = item.data(forType: .tiff) {
-            imageData = tiffData
-        } else if let pngData = item.data(forType: .png) {
-            imageData = pngData
-        } else if let pdfData = item.data(forType: .pdf) {
-            // Some apps copy images as PDF
-            imageData = pdfData
-        } else if pasteboard.canReadObject(forClasses: [NSImage.self], options: nil),
-                  let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
-                  let image = images.first,
-                  let tiffRep = image.tiffRepresentation {
-            // Fallback: read as NSImage and convert to TIFF
-            imageData = tiffRep
-        }
+        let imageData = ClipboardMonitor.imageData(from: item, pasteboard: pasteboard)
 
         let urlString = item.string(forType: .URL)
 
         let fileURLs = (pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+        let typesData = ClipboardMonitor.storedRepresentations(from: item, hasExplicitImageData: imageData != nil)
 
         let type = ClipboardMonitor.resolveType(
             text: textContent,
@@ -257,7 +254,14 @@ final class ClipboardMonitor {
             fileURLs: fileURLs
         )
 
-        let fingerprint = ClipboardMonitor.fingerprint(for: typesData, text: textContent, url: urlString, files: fileURLs)
+        let fingerprint = ClipboardMonitor.fingerprint(
+            for: typesData,
+            text: textContent,
+            rtfData: rtfData,
+            imageData: imageData,
+            url: urlString,
+            files: fileURLs
+        )
 
         return ClipboardItem(
             id: UUID(),
@@ -275,6 +279,94 @@ final class ClipboardMonitor {
             typesData: typesData,
             fingerprint: fingerprint
         )
+    }
+
+    private static func storedRepresentations(
+        from item: NSPasteboardItem,
+        hasExplicitImageData: Bool
+    ) -> [NSPasteboard.PasteboardType: Data] {
+        var typesData: [NSPasteboard.PasteboardType: Data] = [:]
+        var totalBytes = 0
+
+        for type in item.types where shouldStoreRepresentation(type, hasExplicitImageData: hasExplicitImageData) {
+            let data = item.data(forType: type) ?? item.string(forType: type)?.data(using: .utf8)
+            guard let data,
+                  data.count <= maxStoredRepresentationBytes,
+                  totalBytes + data.count <= maxStoredRepresentationsTotalBytes else {
+                continue
+            }
+            typesData[type] = data
+            totalBytes += data.count
+        }
+
+        return typesData
+    }
+
+    private static func shouldStoreRepresentation(
+        _ type: NSPasteboard.PasteboardType,
+        hasExplicitImageData: Bool
+    ) -> Bool {
+        if explicitStoredTypes.contains(type) {
+            return false
+        }
+        if hasExplicitImageData, imageTypes.contains(type) {
+            return false
+        }
+        return true
+    }
+
+    private static func imageData(from item: NSPasteboardItem, pasteboard: NSPasteboard) -> Data? {
+        if let pngData = item.data(forType: .png), pngData.count <= maxCapturedImageBytes {
+            return pngData
+        }
+        if let tiffData = item.data(forType: .tiff),
+           let pngData = normalizedPNGData(from: tiffData) {
+            return pngData
+        }
+        if let pdfData = item.data(forType: .pdf) {
+            if pdfData.count <= maxCapturedImageBytes {
+                return pdfData
+            }
+            if let pngData = normalizedPNGData(from: pdfData) {
+                return pngData
+            }
+        }
+        if pasteboard.canReadObject(forClasses: [NSImage.self], options: nil),
+           let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+           let image = images.first {
+            return normalizedPNGData(from: image)
+        }
+        return nil
+    }
+
+    private static func normalizedPNGData(from data: Data) -> Data? {
+        guard data.count <= maxCapturedImageBytes,
+              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxImagePixelDimension
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return pngData(from: cgImage)
+    }
+
+    private static func normalizedPNGData(from image: NSImage) -> Data? {
+        var rect = CGRect(origin: .zero, size: image.size)
+        guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+            return nil
+        }
+        return pngData(from: cgImage)
+    }
+
+    private static func pngData(from cgImage: CGImage) -> Data? {
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        guard let data = bitmap.representation(using: .png, properties: [:]),
+              data.count <= maxNormalizedImageBytes else { return nil }
+        return data
     }
 
     private static func resolveType(
@@ -305,16 +397,20 @@ final class ClipboardMonitor {
     private static func fingerprint(
         for typesData: [NSPasteboard.PasteboardType: Data],
         text: String?,
+        rtfData: Data?,
+        imageData: Data?,
         url: String?,
         files: [URL]
     ) -> String {
         var hasher = Hasher()
         hasher.combine(text)
+        hasher.combine(rtfData)
+        hasher.combine(imageData)
         hasher.combine(url)
         hasher.combine(files.map { $0.absoluteString }.joined(separator: ","))
         for type in typesData.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
             hasher.combine(type.rawValue)
-            hasher.combine(typesData[type]?.count ?? 0)
+            hasher.combine(typesData[type])
         }
         return String(hasher.finalize())
     }

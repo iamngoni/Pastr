@@ -122,8 +122,8 @@ enum ContentCategory: String, Codable, CaseIterable, Hashable {
     }
 }
 
-/// How sensitive a clip appears, based on local pattern detection. Drives optional UI
-/// blurring and exclusion from sync/backup.
+/// How sensitive a clip appears, based on local pattern detection. This is metadata for
+/// search/classification and is not used to visually block clips in the panel.
 enum SensitivityLevel: String, Codable, Hashable, Comparable {
     /// Nothing sensitive detected.
     case none

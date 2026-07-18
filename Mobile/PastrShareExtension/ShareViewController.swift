@@ -1,17 +1,25 @@
 import SwiftUI
 import UIKit
+import ImageIO
 import UniformTypeIdentifiers
 
 final class ShareViewController: UIViewController {
     private let statusLabel = UILabel()
+    private var saveTask: Task<Void, Never>?
+    private var closeTask: Task<Void, Never>?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         configureView()
 
-        Task {
-            await saveSharedClip()
+        saveTask = Task { [weak self] in
+            await self?.saveSharedClip()
         }
+    }
+
+    deinit {
+        saveTask?.cancel()
+        closeTask?.cancel()
     }
 
     private func configureView() {
@@ -64,13 +72,23 @@ final class ShareViewController: UIViewController {
     }
 
     private func closeAfterDelay() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { [weak self] in
-            self?.extensionContext?.completeRequest(returningItems: nil)
+        closeTask?.cancel()
+        closeTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 550_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.extensionContext?.completeRequest(returningItems: nil)
+            }
         }
     }
 }
 
 private enum ShareClipExtractor {
+    private static let maxInputImageBytes = 25 * 1024 * 1024
+    private static let maxStoredImageBytes = 8 * 1024 * 1024
+    private static let maxTextBytes = 512 * 1024
+    private static let maxImagePixelDimension = 2_048
+
     static func clip(from provider: NSItemProvider) async -> PastrClip? {
         if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier),
            let imageData = await loadImageData(from: provider) {
@@ -108,9 +126,9 @@ private enum ShareClipExtractor {
     }
 
     private static func makeImageClip(_ imageData: Data, title: String = "Image") -> PastrClip {
-        let image = UIImage(data: imageData)
+        let imageSize = imageDimensions(from: imageData)
         let detail: String
-        if let size = image?.size {
+        if let size = imageSize {
             detail = "\(Int(size.width)) x \(Int(size.height)) px"
         } else {
             detail = "Shared image"
@@ -175,10 +193,11 @@ private enum ShareClipExtractor {
             return string
         }
         if let data = item as? Data {
+            guard data.count <= maxTextBytes else { return nil }
             return String(data: data, encoding: .utf8)
         }
         if let url = item as? URL {
-            return try? String(contentsOf: url, encoding: .utf8)
+            return stringFromFile(url)
         }
         return nil
     }
@@ -214,8 +233,7 @@ private enum ShareClipExtractor {
 
         for typeIdentifier in Array(Set(preferredTypeIdentifiers)) {
             if let data = try? await provider.loadData(typeIdentifier: typeIdentifier),
-               let image = UIImage(data: data),
-               let pngData = image.pngData() {
+               let pngData = normalizedImageData(from: data) {
                 return pngData
             }
         }
@@ -225,10 +243,10 @@ private enum ShareClipExtractor {
         }
 
         if let image = item as? UIImage {
-            return image.pngData()
+            return normalizedImageData(from: image)
         }
         if let data = item as? Data {
-            return UIImage(data: data)?.pngData()
+            return normalizedImageData(from: data)
         }
         if let url = item as? URL {
             return imageData(from: url)
@@ -244,11 +262,74 @@ private enum ShareClipExtractor {
             }
         }
 
-        guard let data = try? Data(contentsOf: url),
-              let image = UIImage(data: data) else {
+        guard fileSize(at: url) <= maxInputImageBytes,
+              let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return normalizedImageData(from: source)
+    }
+
+    private static func stringFromFile(_ url: URL) -> String? {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard fileSize(at: url) <= maxTextBytes,
+              let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func fileSize(at url: URL) -> Int {
+        (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+    }
+
+    private static func imageDimensions(from data: Data) -> CGSize? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? CGFloat,
+              let height = properties[kCGImagePropertyPixelHeight] as? CGFloat else {
             return nil
         }
-        return image.pngData()
+        return CGSize(width: width, height: height)
+    }
+
+    private static func normalizedImageData(from data: Data) -> Data? {
+        guard data.count <= maxInputImageBytes,
+              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return normalizedImageData(from: source)
+    }
+
+    private static func normalizedImageData(from source: CGImageSource) -> Data? {
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxImagePixelDimension
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+
+        let image = UIImage(cgImage: cgImage)
+        guard let pngData = image.pngData(),
+              pngData.count <= maxStoredImageBytes else { return nil }
+        return pngData
+    }
+
+    private static func normalizedImageData(from image: UIImage) -> Data? {
+        let largestSide = max(image.size.width, image.size.height)
+        let scale = largestSide > CGFloat(maxImagePixelDimension)
+            ? CGFloat(maxImagePixelDimension) / largestSide
+            : 1
+        let targetSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+        guard let pngData = resized.pngData(),
+              pngData.count <= maxStoredImageBytes else { return nil }
+        return pngData
     }
 }
 

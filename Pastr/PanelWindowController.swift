@@ -82,6 +82,11 @@ final class PanelWindowController {
         self.panel = panel
     }
 
+    deinit {
+        stopClickMonitor()
+        stopKeyMonitor()
+    }
+
     func showPanel() {
         // Check if we should hide during screen sharing
         if !settingsStore.showDuringScreenSharing && isScreenBeingShared() {

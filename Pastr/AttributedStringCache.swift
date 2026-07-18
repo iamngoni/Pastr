@@ -6,16 +6,24 @@ import Foundation
 final class AttributedStringCache {
     static let shared = AttributedStringCache()
 
-    private var cache: [String: AttributedString] = [:]
-    private let cacheQueue = DispatchQueue(label: "com.pastr.attributed-string-cache", attributes: .concurrent)
+    private final class Entry {
+        let value: AttributedString
 
-    private init() {}
+        init(_ value: AttributedString) {
+            self.value = value
+        }
+    }
+
+    private let cache = NSCache<NSString, Entry>()
+
+    private init() {
+        cache.countLimit = 300
+        cache.totalCostLimit = 48 * 1024 * 1024
+    }
 
     /// Returns a cached AttributedString for the given fingerprint, or nil if not cached.
     func cachedAttributedString(for fingerprint: String) -> AttributedString? {
-        cacheQueue.sync {
-            cache[fingerprint]
-        }
+        cache.object(forKey: fingerprint as NSString)?.value
     }
 
     /// Parses RTF data and caches the result. Returns the parsed AttributedString or nil if parsing fails.
@@ -35,25 +43,18 @@ final class AttributedStringCache {
 
         let attributed = AttributedString(nsAttributed)
 
-        // Cache the result
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            self?.cache[fingerprint] = attributed
-        }
+        cache.setObject(Entry(attributed), forKey: fingerprint as NSString, cost: rtfData.count)
 
         return attributed
     }
 
     /// Removes cached entry for a fingerprint (e.g., when item is deleted).
     func removeAttributedString(for fingerprint: String) {
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            self?.cache.removeValue(forKey: fingerprint)
-        }
+        cache.removeObject(forKey: fingerprint as NSString)
     }
 
     /// Clears the entire cache.
     func clearCache() {
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            self?.cache.removeAll()
-        }
+        cache.removeAllObjects()
     }
 }

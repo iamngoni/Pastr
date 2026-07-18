@@ -3,6 +3,12 @@ import Combine
 import CoreData
 
 final class ClipboardHistoryStore: ObservableObject {
+    private enum InitialLoadPolicy {
+        case mergeAll
+        case pinnedOnly
+        case discard
+    }
+
     static let shared = ClipboardHistoryStore()
 
     /// Threshold at which we warn users about potential performance impact
@@ -16,19 +22,70 @@ final class ClipboardHistoryStore: ObservableObject {
         items.count >= Self.performanceWarningThreshold
     }
 
-    private let settings = SettingsStore.shared
+    private lazy var settings = SettingsStore.shared
     private let persistence = HistoryPersistence()
-    private let pinnedStore = PinnedStore.shared
-    private let collectionStore = CollectionStore.shared
-    private let enrichmentStore = AIEnrichmentStore.shared
+    private lazy var pinnedStore = PinnedStore.shared
+    private lazy var collectionStore = CollectionStore.shared
+    private lazy var enrichmentStore = AIEnrichmentStore.shared
+    private let cloudSyncQueue = DispatchQueue(label: "pastr.cloud-sync", qos: .utility)
     private var cancellables = Set<AnyCancellable>()
+    private var hasLoadedHistory = false
+    private var initialLoadPolicy: InitialLoadPolicy = .mergeAll
+    private var locallyDeletedFingerprints: Set<String> = []
 
     init() {
-        items = persistence.load()
+        persistence.loadAsync { [weak self] loadedItems in
+            DispatchQueue.main.async {
+                self?.finishInitialLoad(loadedItems)
+            }
+        }
+    }
+
+    private func finishInitialLoad(_ loadedItems: [ClipboardItem]) {
+        let itemsToMerge: [ClipboardItem]
+        switch initialLoadPolicy {
+        case .mergeAll:
+            itemsToMerge = loadedItems
+        case .pinnedOnly:
+            itemsToMerge = loadedItems.filter(\.isPinned)
+        case .discard:
+            itemsToMerge = []
+        }
+
+        if initialLoadPolicy != .discard {
+            var mergedByFingerprint = Dictionary(
+                itemsToMerge.map { ($0.fingerprint, $0) },
+                uniquingKeysWith: { existing, candidate in
+                    candidate.createdAt > existing.createdAt ? candidate : existing
+                }
+            )
+            for liveItem in items {
+                var item = liveItem
+                if let loadedItem = mergedByFingerprint[liveItem.fingerprint] {
+                    item.isPinned = liveItem.isPinned || loadedItem.isPinned
+                    item.pinnedTitle = liveItem.pinnedTitle ?? loadedItem.pinnedTitle
+                }
+                mergedByFingerprint[item.fingerprint] = item
+            }
+            items = mergedByFingerprint.values.sorted { $0.createdAt > $1.createdAt }
+        }
+
+        hasLoadedHistory = true
+        let prunedItems = prune()
+        let currentFingerprints = Set(items.map(\.fingerprint))
+        let excludedByPolicy = loadedItems.filter { !currentFingerprints.contains($0.fingerprint) }
+        recordLocalDeletions(excludedByPolicy + prunedItems)
+        persistHistory()
+        syncRemove(excludedByPolicy + prunedItems)
         bindSettings()
         migrateToCollections()
         // Enrich any clips loaded from disk that don't yet have on-device intelligence.
         enrichmentStore.backfill(items)
+    }
+
+    private func persistHistory() {
+        guard hasLoadedHistory else { return }
+        persistence.save(items)
     }
 
     /// Migrate from isPinned to collections system
@@ -38,6 +95,7 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     func add(_ item: ClipboardItem) {
+        locallyDeletedFingerprints.remove(item.fingerprint)
         let itemToPersist: ClipboardItem
         if let existingIndex = items.firstIndex(where: { $0.fingerprint == item.fingerprint }) {
             let existing = items[existingIndex]
@@ -53,11 +111,11 @@ final class ClipboardHistoryStore: ObservableObject {
         }
 
         let removed = prune()
-        persistence.save(items)
+        persistHistory()
         syncUpsert(itemToPersist)
         syncRemove(removed)
         enrichmentStore.enrich(itemToPersist)
-        removed.forEach { enrichmentStore.remove(fingerprint: $0.fingerprint) }
+        removed.forEach { pruneDerivedDataIfOrphaned($0.fingerprint) }
         SoundManager.playCopySound()
     }
 
@@ -113,7 +171,7 @@ final class ClipboardHistoryStore: ObservableObject {
             syncUpsert(updated)
             SoundManager.playPinSound()
         }
-        persistence.save(items)
+        persistHistory()
     }
 
     // MARK: - Collection Management
@@ -143,40 +201,56 @@ final class ClipboardHistoryStore: ObservableObject {
         updated.pinnedTitle = title
         items[index] = updated
         syncUpsert(updated)
-        persistence.save(items)
+        persistHistory()
     }
 
     func clearUnpinnedItems() {
+        if !hasLoadedHistory, initialLoadPolicy != .discard {
+            initialLoadPolicy = .pinnedOnly
+        }
         let removed = items.filter { !$0.isPinned }
         items.removeAll { !$0.isPinned }
-        persistence.save(items)
+        persistHistory()
+        recordLocalDeletions(removed)
         syncRemove(removed)
-        enrichmentStore.prune(keeping: Set(items.map { $0.fingerprint }))
+        if hasLoadedHistory {
+            enrichmentStore.prune(keeping: Set(items.map { $0.fingerprint }))
+            removed.forEach { pruneCachesIfOrphaned($0.fingerprint) }
+        }
     }
 
     func delete(_ item: ClipboardItem) {
-        syncRemove([item])
         items.removeAll { $0.id == item.id }
-        persistence.save(items)
-        pruneEnrichmentIfOrphaned(item.fingerprint)
+        persistHistory()
+        recordLocalDeletions([item])
+        syncRemove([item])
+        pruneDerivedDataIfOrphaned(item.fingerprint)
     }
 
     func delete(_ itemsToDelete: [ClipboardItem]) {
         let idsToDelete = Set(itemsToDelete.map { $0.id })
-        syncRemove(itemsToDelete)
         items.removeAll { idsToDelete.contains($0.id) }
-        persistence.save(items)
-        itemsToDelete.forEach { pruneEnrichmentIfOrphaned($0.fingerprint) }
+        persistHistory()
+        recordLocalDeletions(itemsToDelete)
+        syncRemove(itemsToDelete)
+        itemsToDelete.forEach { pruneDerivedDataIfOrphaned($0.fingerprint) }
     }
 
-    /// Remove enrichment for a fingerprint only if no remaining clip uses it.
-    private func pruneEnrichmentIfOrphaned(_ fingerprint: String) {
+    /// Remove derived data for a fingerprint only if no remaining clip uses it.
+    private func pruneDerivedDataIfOrphaned(_ fingerprint: String) {
         guard !items.contains(where: { $0.fingerprint == fingerprint }) else { return }
         enrichmentStore.remove(fingerprint: fingerprint)
+        pruneCachesIfOrphaned(fingerprint)
+    }
+
+    private func pruneCachesIfOrphaned(_ fingerprint: String) {
+        guard !items.contains(where: { $0.fingerprint == fingerprint }) else { return }
+        AttributedStringCache.shared.removeAttributedString(for: fingerprint)
+        ClipboardImageCache.shared.removeImage(for: fingerprint)
     }
 
     func mergeCloudItems(_ cloudItems: [ClipboardItem]) {
-        for cloudItem in cloudItems {
+        for cloudItem in cloudItems where !locallyDeletedFingerprints.contains(cloudItem.fingerprint) {
             if let index = items.firstIndex(where: { $0.fingerprint == cloudItem.fingerprint }) {
                 items[index] = cloudItem
             } else {
@@ -184,41 +258,66 @@ final class ClipboardHistoryStore: ObservableObject {
             }
         }
         items.sort { $0.createdAt > $1.createdAt }
-        persistence.save(items)
+        persistHistory()
     }
 
     func replaceAll(with newItems: [ClipboardItem]) {
+        if !hasLoadedHistory { initialLoadPolicy = .discard }
+        let oldFingerprints = Set(items.map { $0.fingerprint })
         items = newItems.sorted { $0.createdAt > $1.createdAt }
-        persistence.save(items)
-        if settings.iCloudSyncEnabled {
-            try? pinnedStore.removeAll()
-            syncAllToCloud()
+        persistHistory()
+        let currentFingerprints = Set(items.map { $0.fingerprint })
+        locallyDeletedFingerprints.formUnion(oldFingerprints.subtracting(currentFingerprints))
+        locallyDeletedFingerprints.subtract(currentFingerprints)
+        oldFingerprints.subtracting(currentFingerprints).forEach { fingerprint in
+            enrichmentStore.remove(fingerprint: fingerprint)
+            AttributedStringCache.shared.removeAttributedString(for: fingerprint)
+            ClipboardImageCache.shared.removeImage(for: fingerprint)
+        }
+        if settings.iCloudSyncEnabled, pinnedStore.isCloudSyncAvailable {
+            let replacement = items
+            cloudSyncQueue.async { [pinnedStore] in
+                try? pinnedStore.replaceAll(with: replacement)
+            }
         }
     }
 
     func syncAllToCloud() {
-        guard settings.iCloudSyncEnabled else { return }
-        for item in items {
-            try? pinnedStore.upsert(item)
+        guard settings.iCloudSyncEnabled, pinnedStore.isCloudSyncAvailable else { return }
+        let localItems = items
+        cloudSyncQueue.async { [pinnedStore] in
+            try? pinnedStore.upsert(localItems)
         }
     }
 
     func syncNow() {
         guard settings.iCloudSyncEnabled else { return }
+        guard pinnedStore.isCloudSyncAvailable else {
+            syncState = .failed(message: "iCloud sync is unavailable in this build.")
+            return
+        }
         syncState = .syncing
-        let localItems = items
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        cloudSyncQueue.async { [weak self] in
             guard let self else { return }
             do {
                 let cloudItems = try self.pinnedStore.fetchAll()
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
                     self.mergeCloudItems(cloudItems)
-                }
-                for item in localItems {
-                    try self.pinnedStore.upsert(item)
-                }
-                DispatchQueue.main.async {
-                    self.syncState = .success
+                    let mergedItems = self.items
+                    self.cloudSyncQueue.async { [weak self] in
+                        guard let self else { return }
+                        do {
+                            try self.pinnedStore.upsert(mergedItems)
+                            DispatchQueue.main.async {
+                                self.syncState = .success
+                            }
+                        } catch {
+                            DispatchQueue.main.async {
+                                self.syncState = .failed(message: error.localizedDescription)
+                            }
+                        }
+                    }
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -271,7 +370,8 @@ final class ClipboardHistoryStore: ObservableObject {
             .sink { [weak self] _, _, _ in
                 guard let self else { return }
                 let removed = self.prune()
-                self.persistence.save(self.items)
+                self.persistHistory()
+                self.recordLocalDeletions(removed)
                 self.syncRemove(removed)
             }
             .store(in: &cancellables)
@@ -280,10 +380,7 @@ final class ClipboardHistoryStore: ObservableObject {
             .removeDuplicates()
             .sink { [weak self] enabled in
                 guard let self, enabled else { return }
-                if let cloudItems = try? self.pinnedStore.fetchAll() {
-                    self.mergeCloudItems(cloudItems)
-                }
-                self.syncAllToCloud()
+                self.syncNow()
             }
             .store(in: &cancellables)
 
@@ -298,9 +395,9 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     private func mergeLatestCloudItems() {
-        guard settings.iCloudSyncEnabled else { return }
+        guard settings.iCloudSyncEnabled, pinnedStore.isCloudSyncAvailable else { return }
 
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        cloudSyncQueue.async { [weak self] in
             guard let self,
                   let cloudItems = try? self.pinnedStore.fetchAll() else {
                 return
@@ -313,14 +410,26 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     private func syncUpsert(_ item: ClipboardItem) {
-        guard settings.iCloudSyncEnabled else { return }
-        try? pinnedStore.upsert(item)
+        guard settings.iCloudSyncEnabled, pinnedStore.isCloudSyncAvailable else { return }
+        cloudSyncQueue.async { [pinnedStore] in
+            try? pinnedStore.upsert(item)
+        }
     }
 
     private func syncRemove(_ items: [ClipboardItem]) {
-        guard settings.iCloudSyncEnabled else { return }
-        for item in items {
-            try? pinnedStore.remove(fingerprint: item.fingerprint)
+        guard settings.iCloudSyncEnabled, pinnedStore.isCloudSyncAvailable else { return }
+        let currentFingerprints = Set(self.items.map(\.fingerprint))
+        let fingerprints = Array(Set(items.map(\.fingerprint)).subtracting(currentFingerprints))
+        guard !fingerprints.isEmpty else { return }
+        cloudSyncQueue.async { [pinnedStore] in
+            try? pinnedStore.remove(fingerprints: fingerprints)
+        }
+    }
+
+    private func recordLocalDeletions(_ removedItems: [ClipboardItem]) {
+        let currentFingerprints = Set(items.map(\.fingerprint))
+        for fingerprint in Set(removedItems.map(\.fingerprint)).subtracting(currentFingerprints) {
+            locallyDeletedFingerprints.insert(fingerprint)
         }
     }
 }

@@ -33,8 +33,21 @@ enum SyntaxHighlighter {
 
     // MARK: - Result Cache (avoid re-highlighting same text)
 
-    private static var highlightCache = NSCache<NSString, NSAttributedString>()
-    private static var codeDetectionCache = NSCache<NSString, NSNumber>()
+    private static let maxDetectionScanLength = 6_000
+    private static let maxHighlightLength = 12_000
+
+    private static var highlightCache: NSCache<NSString, NSAttributedString> = {
+        let cache = NSCache<NSString, NSAttributedString>()
+        cache.countLimit = 200
+        cache.totalCostLimit = 24 * 1024 * 1024
+        return cache
+    }()
+
+    private static var codeDetectionCache: NSCache<NSString, NSNumber> = {
+        let cache = NSCache<NSString, NSNumber>()
+        cache.countLimit = 500
+        return cache
+    }()
 
     // MARK: - Keywords
 
@@ -77,25 +90,25 @@ enum SyntaxHighlighter {
     // MARK: - Detection
 
     static func isLikelyCode(_ text: String) -> Bool {
-        // Check cache first
-        let cacheKey = text as NSString
+        let scannedText = String(text.prefix(maxDetectionScanLength))
+        let cacheKey = cacheKey(prefix: "code", text: scannedText)
         if let cached = codeDetectionCache.object(forKey: cacheKey) {
             return cached.boolValue
         }
 
-        let lowercased = text.lowercased()
+        let lowercased = scannedText.lowercased()
         var matchCount = 0
         for indicator in codeIndicators {
-            if lowercased.contains(indicator.lowercased()) {
+            if lowercased.contains(indicator) {
                 matchCount += 1
                 if matchCount >= 2 { break } // Early exit optimization
             }
         }
 
         // Also check for common patterns
-        let hasIndentation = text.contains("\n    ") || text.contains("\n\t")
-        let hasBraces = text.contains("{") && text.contains("}")
-        let hasParens = text.contains("(") && text.contains(")")
+        let hasIndentation = scannedText.contains("\n    ") || scannedText.contains("\n\t")
+        let hasBraces = scannedText.contains("{") && scannedText.contains("}")
+        let hasParens = scannedText.contains("(") && scannedText.contains(")")
 
         let result = matchCount >= 2 || (matchCount >= 1 && (hasIndentation || (hasBraces && hasParens)))
 
@@ -109,7 +122,7 @@ enum SyntaxHighlighter {
 
     static func highlight(_ text: String) -> NSAttributedString {
         // Check cache first
-        let cacheKey = text as NSString
+        let cacheKey = cacheKey(prefix: "highlight", text: text)
         if let cached = highlightCache.object(forKey: cacheKey) {
             return cached
         }
@@ -123,48 +136,54 @@ enum SyntaxHighlighter {
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         ], range: fullRange)
 
-        // Use cached regexes for highlighting
-        if let regex = doubleQuoteStringRegex {
-            applyHighlight(regex: regex, in: attributed, with: stringColor)
-        }
-        if let regex = singleQuoteStringRegex {
-            applyHighlight(regex: regex, in: attributed, with: stringColor)
-        }
-        if let regex = templateLiteralRegex {
-            applyHighlight(regex: regex, in: attributed, with: stringColor)
-        }
-        if let regex = singleLineCommentRegex {
-            applyHighlight(regex: regex, in: attributed, with: commentColor)
-        }
-        if let regex = multiLineCommentRegex {
-            applyHighlight(regex: regex, in: attributed, with: commentColor)
-        }
-        if let regex = hashCommentRegex {
-            applyHighlight(regex: regex, in: attributed, with: commentColor)
-        }
-        if let regex = numberRegex {
-            applyHighlight(regex: regex, in: attributed, with: numberColor)
-        }
+        if text.utf16.count <= maxHighlightLength {
+            // Use cached regexes for highlighting
+            if let regex = doubleQuoteStringRegex {
+                applyHighlight(regex: regex, in: attributed, with: stringColor)
+            }
+            if let regex = singleQuoteStringRegex {
+                applyHighlight(regex: regex, in: attributed, with: stringColor)
+            }
+            if let regex = templateLiteralRegex {
+                applyHighlight(regex: regex, in: attributed, with: stringColor)
+            }
+            if let regex = singleLineCommentRegex {
+                applyHighlight(regex: regex, in: attributed, with: commentColor)
+            }
+            if let regex = multiLineCommentRegex {
+                applyHighlight(regex: regex, in: attributed, with: commentColor)
+            }
+            if let regex = hashCommentRegex {
+                applyHighlight(regex: regex, in: attributed, with: commentColor)
+            }
+            if let regex = numberRegex {
+                applyHighlight(regex: regex, in: attributed, with: numberColor)
+            }
 
-        // Highlight keywords using pre-compiled regexes
-        for regex in keywordRegexes {
-            applyHighlight(regex: regex, in: attributed, with: keywordColor)
-        }
+            // Highlight keywords using pre-compiled regexes
+            for regex in keywordRegexes {
+                applyHighlight(regex: regex, in: attributed, with: keywordColor)
+            }
 
-        // Highlight types using pre-compiled regexes
-        for regex in typeRegexes {
-            applyHighlight(regex: regex, in: attributed, with: typeColor)
-        }
+            // Highlight types using pre-compiled regexes
+            for regex in typeRegexes {
+                applyHighlight(regex: regex, in: attributed, with: typeColor)
+            }
 
-        // Highlight function calls
-        if let regex = functionCallRegex {
-            applyHighlight(regex: regex, in: attributed, with: functionColor, captureGroup: 1)
+            // Highlight function calls
+            if let regex = functionCallRegex {
+                applyHighlight(regex: regex, in: attributed, with: functionColor, captureGroup: 1)
+            }
         }
 
         // Cache the result
-        highlightCache.setObject(attributed, forKey: cacheKey)
+        highlightCache.setObject(attributed, forKey: cacheKey, cost: text.utf16.count * 2)
 
         return attributed
+    }
+
+    private static func cacheKey(prefix: String, text: String) -> NSString {
+        "\(prefix):\(text.utf8.count):\(text.hashValue)" as NSString
     }
 
     private static func applyHighlight(

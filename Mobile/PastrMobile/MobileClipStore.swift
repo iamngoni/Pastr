@@ -13,6 +13,8 @@ final class MobileClipStore: ObservableObject {
     private let isScreenshotMode: Bool
     private var remoteChangeObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
+    private var refreshTask: Task<Void, Never>?
+    private var mutationTask: Task<Void, Never>?
 
     init(
         cloudStore: PastrCloudClipStore = .shared,
@@ -33,11 +35,14 @@ final class MobileClipStore: ObservableObject {
         if let foregroundObserver {
             NotificationCenter.default.removeObserver(foregroundObserver)
         }
+        refreshTask?.cancel()
+        mutationTask?.cancel()
     }
 
     func refresh() {
-        Task {
-            await refreshNow()
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self] in
+            await self?.refreshNow()
         }
     }
 
@@ -58,8 +63,9 @@ final class MobileClipStore: ObservableObject {
     }
 
     func captureCurrentPasteboard() {
-        Task {
-            await importCurrentPasteboard()
+        mutationTask?.cancel()
+        mutationTask = Task { [weak self] in
+            await self?.importCurrentPasteboard()
         }
     }
 
@@ -82,7 +88,9 @@ final class MobileClipStore: ObservableObject {
     }
 
     func delete(_ clip: PastrClip) {
-        Task {
+        mutationTask?.cancel()
+        mutationTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 try cloudStore.remove(fingerprint: clip.fingerprint)
                 let latest = try cloudStore.refreshSharedCache()
@@ -100,9 +108,7 @@ final class MobileClipStore: ObservableObject {
             object: cloudStore.container.persistentStoreCoordinator,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.refresh()
-            }
+            self?.refresh()
         }
 
         foregroundObserver = NotificationCenter.default.addObserver(
@@ -110,9 +116,7 @@ final class MobileClipStore: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.refresh()
-            }
+            self?.refresh()
         }
     }
 }
@@ -125,11 +129,15 @@ enum MobileSyncState: Equatable {
 }
 
 enum PastrPasteboardImporter {
+    private static let maxStoredImageBytes = 8 * 1024 * 1024
+    private static let maxImagePixelDimension = 2_048
+    private static let maxTextBytes = 512 * 1024
+
     static func clipFromCurrentPasteboard() -> PastrClip? {
         let pasteboard = UIPasteboard.general
 
         if let image = pasteboard.image,
-           let data = image.pngData() {
+           let data = normalizedPNGData(from: image) {
             return PastrClip(
                 type: .image,
                 source: "Clipboard",
@@ -163,7 +171,8 @@ enum PastrPasteboardImporter {
         }
 
         if let text = pasteboard.string?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !text.isEmpty {
+           !text.isEmpty,
+           text.utf8.count <= maxTextBytes {
             let detectedURL = URL(string: text)
             let detectedScheme = detectedURL?.scheme?.lowercased()
             let detectedWebURL = detectedScheme == "http" || detectedScheme == "https" ? detectedURL : nil
@@ -189,5 +198,20 @@ enum PastrPasteboardImporter {
         }
 
         return nil
+    }
+
+    private static func normalizedPNGData(from image: UIImage) -> Data? {
+        let largestSide = max(image.size.width, image.size.height)
+        let scale = largestSide > CGFloat(maxImagePixelDimension)
+            ? CGFloat(maxImagePixelDimension) / largestSide
+            : 1
+        let targetSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let normalized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+        guard let data = normalized.pngData(),
+              data.count <= maxStoredImageBytes else { return nil }
+        return data
     }
 }

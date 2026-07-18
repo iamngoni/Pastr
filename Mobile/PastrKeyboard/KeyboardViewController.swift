@@ -78,7 +78,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func copyImageClipToPasteboard(_ clip: PastrClip) -> Bool {
         guard let imageData = clip.imageData,
-              UIImage(data: imageData) != nil else {
+              !imageData.isEmpty else {
             return false
         }
 
