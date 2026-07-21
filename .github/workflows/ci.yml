@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: [self-hosted, macOS]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build macOS app
+        run: xcodebuild -project Pastr.xcodeproj -scheme Pastr -configuration Debug -destination 'platform=macOS' build
