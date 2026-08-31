@@ -6,8 +6,12 @@ final class PinnedStore {
     static let shared = PinnedStore()
 
     private static let cloudContainerIdentifier = "iCloud.za.co.codecraftsolutions.Pastr"
+    private static let storeLoadQueue = DispatchQueue(label: "pastr.cloud-store-load", qos: .utility)
 
     private let container: NSPersistentContainer
+    private let storeLoadGroup = DispatchGroup()
+    private let storeLoadLock = NSLock()
+    private var storeLoadError: Error?
     let isCloudSyncAvailable: Bool
     private let migrationKey = "cloudHistoryPinnedMigrationCompleted"
 
@@ -41,12 +45,29 @@ final class PinnedStore {
             description?.type = NSInMemoryStoreType
         }
 
-        container.loadPersistentStores { _, error in
-            if let error {
-                NSLog("PinnedStore load error: \(error)")
+        container.viewContext.automaticallyMergesChangesFromParent = true
+
+        // CloudKit validates the model and opens SQLite synchronously before invoking the
+        // completion handler. Starting that work on the main thread was enough to trip the
+        // app-hang watchdog during launch, so callers wait only from the sync worker queue.
+        storeLoadGroup.enter()
+        let loadStores = { [weak self] in
+            guard let self else { return }
+            self.container.loadPersistentStores { _, error in
+                self.storeLoadLock.lock()
+                self.storeLoadError = error
+                self.storeLoadLock.unlock()
+                if let error {
+                    NSLog("PinnedStore load error: \(error)")
+                }
+                self.storeLoadGroup.leave()
             }
         }
-        container.viewContext.automaticallyMergesChangesFromParent = true
+        if useCloudKit {
+            Self.storeLoadQueue.async(execute: loadStores)
+        } else {
+            loadStores()
+        }
     }
 
     private static var isRunningTests: Bool {
@@ -72,6 +93,7 @@ final class PinnedStore {
     }
 
     func fetchAll() throws -> [ClipboardItem] {
+        try waitForPersistentStore()
         let context = makeBackgroundContext()
         var fetched: [ClipboardItem] = []
         var fetchError: Error?
@@ -142,6 +164,7 @@ final class PinnedStore {
     /// fetching, serializing large blobs, and checkpointing SQLite once per clip.
     func upsert(_ items: [ClipboardItem]) throws {
         guard !items.isEmpty else { return }
+        try waitForPersistentStore()
         let uniqueItems = Array(
             Dictionary(items.map { ($0.fingerprint, $0) }, uniquingKeysWith: { _, newest in newest }).values
         )
@@ -187,6 +210,7 @@ final class PinnedStore {
     func remove(fingerprints: [String]) throws {
         let uniqueFingerprints = Array(Set(fingerprints))
         guard !uniqueFingerprints.isEmpty else { return }
+        try waitForPersistentStore()
         let context = makeBackgroundContext()
         var removeError: Error?
         context.performAndWait {
@@ -220,6 +244,7 @@ final class PinnedStore {
     /// Replace the cloud history in one transaction so resets cannot expose a partially written
     /// database or trigger one SQLite checkpoint per item.
     func replaceAll(with items: [ClipboardItem]) throws {
+        try waitForPersistentStore()
         let uniqueItems = Array(
             Dictionary(items.map { ($0.fingerprint, $0) }, uniquingKeysWith: { _, newest in newest }).values
         )
@@ -266,6 +291,16 @@ final class PinnedStore {
         context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
         context.undoManager = nil
         return context
+    }
+
+    private func waitForPersistentStore() throws {
+        storeLoadGroup.wait()
+        storeLoadLock.lock()
+        let error = storeLoadError
+        storeLoadLock.unlock()
+        if let error {
+            throw error
+        }
     }
 
     private func save(context: NSManagedObjectContext) throws {

@@ -93,6 +93,65 @@ final class PastrTests: XCTestCase {
         XCTAssertNotEqual(left, right)
     }
 
+    func testClipboardItemEqualityDoesNotTraverseLargeTextPayloads() {
+        let id = UUID()
+        let createdAt = Date(timeIntervalSince1970: 1_785_000_000)
+        let largeText = String(repeating: "🧑🏽‍💻", count: 250_000)
+        let left = makeClipboardItem(
+            id: id,
+            createdAt: createdAt,
+            textContent: largeText,
+            fingerprint: "large-text"
+        )
+        let right = makeClipboardItem(
+            id: id,
+            createdAt: createdAt,
+            textContent: largeText,
+            fingerprint: "large-text"
+        )
+
+        XCTAssertEqual(left, right)
+        XCTAssertEqual(left.hashValue, right.hashValue)
+    }
+
+    func testDisplaySizeDetectionUsesEffectivePixelWidth() {
+        XCTAssertEqual(DisplaySize.detected(forEffectivePixelWidth: 2_000), .compact)
+        XCTAssertEqual(DisplaySize.detected(forEffectivePixelWidth: 2_560), .regular)
+        XCTAssertEqual(DisplaySize.detected(forEffectivePixelWidth: 3_840), .large)
+    }
+
+    func testCloudMergeBuildsOneSortedSnapshotAndHonorsLocalDeletion() {
+        let olderLocal = makeClipboardItem(
+            id: UUID(),
+            createdAt: Date(timeIntervalSince1970: 100),
+            fingerprint: "shared"
+        )
+        let newestLocal = makeClipboardItem(
+            id: UUID(),
+            createdAt: Date(timeIntervalSince1970: 300),
+            fingerprint: "local-only"
+        )
+        let cloudReplacement = makeClipboardItem(
+            id: UUID(),
+            createdAt: Date(timeIntervalSince1970: 200),
+            fingerprint: "shared"
+        )
+        let deletedCloudItem = makeClipboardItem(
+            id: UUID(),
+            createdAt: Date(timeIntervalSince1970: 400),
+            fingerprint: "deleted"
+        )
+
+        let merged = ClipboardHistoryStore.mergedItems(
+            localItems: [olderLocal, newestLocal],
+            cloudItems: [cloudReplacement, deletedCloudItem],
+            excluding: ["deleted"]
+        )
+
+        XCTAssertEqual(merged.map(\.fingerprint), ["local-only", "shared"])
+        XCTAssertEqual(merged.last?.id, cloudReplacement.id)
+    }
+
     func testDisplayPreviewsAreBoundedWithoutChangingClipboardPayload() {
         let payload = String(repeating: "func example() { return 42 }\n", count: 5_000)
         let item = makeClipboardItem(

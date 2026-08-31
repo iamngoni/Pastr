@@ -94,6 +94,7 @@ final class PanelWindowController {
         }
 
         guard let screen = screenForCursor() else { return }
+        settingsStore.updateDetectedDisplaySize(for: screen)
         let targetFrame = panelFrame(for: screen)
         let startFrame = targetFrame.offsetBy(dx: 0, dy: -targetFrame.height - 12)
 
@@ -168,7 +169,7 @@ final class PanelWindowController {
 
     private func panelFrame(for screen: NSScreen) -> NSRect {
         let margin: CGFloat = 18
-        let displaySize = settingsStore.displaySize
+        let displaySize = settingsStore.resolvedDisplaySize
         // Use dynamic height based on card height + header/padding
         let height: CGFloat = displaySize.cardHeight + 100
         let width = screen.visibleFrame.width - margin * 2

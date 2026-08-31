@@ -65,7 +65,7 @@ struct WhatsNewView: View {
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
 
-                Text("On-device intelligence — all processed locally")
+                Text("Faster, smoother, and more reliable")
                     .font(.system(size: 14))
                     .foregroundColor(Color(red: 0.56, green: 0.56, blue: 0.58))
             }
@@ -125,21 +125,21 @@ struct WhatsNewView: View {
     }
 
     static let highlights: [Highlight] = [
-        Highlight(icon: "text.viewfinder",
-                  title: "Text in Images",
-                  description: "Search and copy text from screenshots with on-device OCR"),
         Highlight(icon: "text.magnifyingglass",
-                  title: "Search by Meaning",
-                  description: "Find clips by what they mean, not just exact words"),
-        Highlight(icon: "tag.fill",
-                  title: "Smart Tagging",
-                  description: "Clips are classified and tagged automatically"),
-        Highlight(icon: "lock.shield",
-                  title: "Sensitive Content Protection",
-                  description: "Secrets like API keys and passwords are detected and blurred"),
-        Highlight(icon: "sparkles",
-                  title: "Apple Intelligence",
-                  description: "Generate titles, summaries, and \u{201C}Paste As…\u{201D} rewrites on supported Macs"),
+                  title: "Responsive Search",
+                  description: "Large clipboard histories stay responsive while exact and semantic search run in the background"),
+        Highlight(icon: "icloud",
+                  title: "Smoother Sync",
+                  description: "CloudKit startup and history merging no longer hold up the panel"),
+        Highlight(icon: "photo",
+                  title: "Faster Image Previews",
+                  description: "Image clips decode away from the main thread for smoother scrolling"),
+        Highlight(icon: "rectangle.stack",
+                  title: "Stable Large Histories",
+                  description: "Clipboard and intelligence updates are batched to reduce unnecessary interface refreshes"),
+        Highlight(icon: "bolt.shield",
+                  title: "Reliability Fixes",
+                  description: "Resolved startup, rich-text, search-field, display, and preview hangs reported from production"),
     ]
 }
 

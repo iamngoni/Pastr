@@ -12,7 +12,7 @@ final class PanelViewModel: ObservableObject {
     @Published var selectedItemIds: Set<UUID> = []
     @Published private(set) var previewItem: ClipboardItem?
     @Published var showingCreateCollection: Bool = false
-    @Published private var semanticMatchFingerprints: [String] = []
+    @Published private(set) var items: [ClipboardItem] = []
 
     private let historyStore: ClipboardHistoryStore
     private let collectionStore = CollectionStore.shared
@@ -20,18 +20,12 @@ final class PanelViewModel: ObservableObject {
     private let enrichmentStore = AIEnrichmentStore.shared
     private var previewSource: PreviewSource?
     private var hoverWorkItem: DispatchWorkItem?
-    private var semanticSearchTask: Task<Void, Never>?
+    private var searchTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
-
-    /// Cached filtered items to avoid recomputing on every access during layout
-    private var cachedFilteredItems: [ClipboardItem]?
-    private var cachedSearchText: String = ""
-    private var cachedSection: PanelSection = .history
-    private var semanticResultQuery = ""
-    private var semanticResultSection: PanelSection = .history
 
     init(historyStore: ClipboardHistoryStore) {
         self.historyStore = historyStore
+        items = historyStore.items(for: selectedSection)
         // Invalidate cache when history changes
         historyStore.$items
             .sink { [weak self] _ in
@@ -48,6 +42,7 @@ final class PanelViewModel: ObservableObject {
 
         enrichmentStore.$enrichments
             .sink { [weak self] _ in
+                guard self?.searchText.isEmpty == false else { return }
                 self?.searchSourceDidChange()
             }
             .store(in: &cancellables)
@@ -62,109 +57,114 @@ final class PanelViewModel: ObservableObject {
 
     deinit {
         hoverWorkItem?.cancel()
-        semanticSearchTask?.cancel()
-    }
-
-    private func invalidateFilteredItems() {
-        cachedFilteredItems = nil
+        searchTask?.cancel()
     }
 
     private func searchCriteriaDidChange() {
-        invalidateFilteredItems()
-        scheduleSemanticSearch()
+        scheduleSearch()
     }
 
     private func searchSourceDidChange() {
-        invalidateFilteredItems()
-        scheduleSemanticSearch()
+        scheduleSearch()
     }
 
-    private func scheduleSemanticSearch() {
-        semanticSearchTask?.cancel()
-        semanticSearchTask = nil
-        semanticMatchFingerprints = []
-        semanticResultQuery = ""
-
+    private func scheduleSearch() {
+        searchTask?.cancel()
         let query = searchText
         let section = selectedSection
-        guard settings.semanticSearchEnabled,
-              query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3 else {
+        let baseItems = historyStore.items(for: section)
+        guard !query.isEmpty else {
+            items = baseItems
             return
         }
-        let baseItems = historyStore.items(for: section)
 
-        semanticSearchTask = Task { [weak self] in
+        let enrichments = enrichmentStore.enrichments
+        let searchableTextByFingerprint = enrichments.reduce(into: [String: String]()) { result, entry in
+            if let text = entry.value.searchableText {
+                result[entry.key] = text
+            }
+        }
+        let embeddingByFingerprint = enrichments.reduce(into: [String: [Float]]()) { result, entry in
+            if let embedding = entry.value.embedding {
+                result[entry.key] = embedding
+            }
+        }
+        let semanticSearchEnabled = settings.semanticSearchEnabled
+        searchTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 150_000_000)
-            guard let self, !Task.isCancelled else { return }
-            let matches = await self.enrichmentStore.semanticMatches(for: query, among: baseItems)
-            guard !Task.isCancelled,
-                  self.searchText == query,
-                  self.selectedSection == section else { return }
-            self.semanticResultQuery = query
-            self.semanticResultSection = section
-            self.semanticMatchFingerprints = matches.map(\.fingerprint)
-            self.invalidateFilteredItems()
+            guard !Task.isCancelled else { return }
+            let matches = await Self.searchItems(
+                query: query,
+                baseItems: baseItems,
+                searchableTextByFingerprint: searchableTextByFingerprint,
+                embeddingByFingerprint: embeddingByFingerprint,
+                semanticSearchEnabled: semanticSearchEnabled
+            )
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self,
+                      self.searchText == query,
+                      self.selectedSection == section else { return }
+                self.items = matches
+            }
         }
     }
 
-    var items: [ClipboardItem] {
-        // Return cached results if valid
-        if let cached = cachedFilteredItems,
-           cachedSearchText == searchText,
-           cachedSection == selectedSection {
-            return cached
-        }
-
-        // Compute and cache
-        let baseItems = historyStore.items(for: selectedSection)
-        let result: [ClipboardItem]
-
-        if searchText.isEmpty {
-            result = baseItems
-        } else {
-            let query = searchText
-            // Exact/substring matches across clip text, metadata and OCR'd image text.
-            var literalMatches = baseItems.filter { item in
+    private nonisolated static func searchItems(
+        query: String,
+        baseItems: [ClipboardItem],
+        searchableTextByFingerprint: [String: String],
+        embeddingByFingerprint: [String: [Float]],
+        semanticSearchEnabled: Bool
+    ) async -> [ClipboardItem] {
+        let worker = Task.detached(priority: .userInitiated) { () -> [ClipboardItem] in
+            var literalMatches: [ClipboardItem] = []
+            literalMatches.reserveCapacity(min(baseItems.count, 256))
+            for (index, item) in baseItems.enumerated() {
+                if index.isMultiple(of: 64), Task.isCancelled { return [] }
                 if item.textContent?.localizedCaseInsensitiveContains(query) == true {
-                    return true
+                    literalMatches.append(item)
+                    continue
                 }
-                if item.urlString?.localizedCaseInsensitiveContains(query) == true {
-                    return true
-                }
-                if item.pinnedTitle?.localizedCaseInsensitiveContains(query) == true {
-                    return true
-                }
-                if item.sourceAppName?.localizedCaseInsensitiveContains(query) == true {
-                    return true
-                }
-                if item.fileURLs.contains(where: { $0.lastPathComponent.localizedCaseInsensitiveContains(query) }) {
-                    return true
-                }
-                if enrichmentStore.searchableText(for: item.fingerprint)?.localizedCaseInsensitiveContains(query) == true {
-                    return true
-                }
-                return false
-            }
-
-            // Semantic ("search by meaning") matches appended after literal hits, ranked by
-            // similarity and de-duplicated. Only kicks in when enabled and available.
-            let literalIds = Set(literalMatches.map { $0.id })
-            if semanticResultQuery == searchText,
-               semanticResultSection == selectedSection,
-               !semanticMatchFingerprints.isEmpty {
-                let byFingerprint = Dictionary(baseItems.map { ($0.fingerprint, $0) }, uniquingKeysWith: { a, _ in a })
-                for fingerprint in semanticMatchFingerprints {
-                    guard let item = byFingerprint[fingerprint], !literalIds.contains(item.id) else { continue }
+                let matchesMetadata = item.urlString?.localizedCaseInsensitiveContains(query) == true
+                    || item.pinnedTitle?.localizedCaseInsensitiveContains(query) == true
+                    || item.sourceAppName?.localizedCaseInsensitiveContains(query) == true
+                    || item.fileURLs.contains {
+                        $0.lastPathComponent.localizedCaseInsensitiveContains(query)
+                    }
+                    || searchableTextByFingerprint[item.fingerprint]?.localizedCaseInsensitiveContains(query) == true
+                if matchesMetadata {
                     literalMatches.append(item)
                 }
             }
-            result = literalMatches
+
+            guard semanticSearchEnabled,
+                  query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3,
+                  !Task.isCancelled,
+                  let queryVector = SemanticIndex.embedQuery(query) else {
+                return literalMatches
+            }
+
+            let literalIds = Set(literalMatches.map { $0.id })
+            var semanticMatches: [(item: ClipboardItem, score: Float)] = []
+            for (index, item) in baseItems.enumerated() where !literalIds.contains(item.id) {
+                if index.isMultiple(of: 64), Task.isCancelled { return [] }
+                guard let vector = embeddingByFingerprint[item.fingerprint] else { continue }
+                let score = SemanticIndex.similarity(queryVector, vector)
+                if score >= SemanticIndex.matchThreshold {
+                    semanticMatches.append((item, score))
+                }
+            }
+            semanticMatches.sort { $0.score > $1.score }
+            literalMatches.append(contentsOf: semanticMatches.map(\.item))
+            return literalMatches
         }
 
-        cachedFilteredItems = result
-        cachedSearchText = searchText
-        cachedSection = selectedSection
-        return result
+        return await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
     }
 
     var selectedItem: ClipboardItem? {

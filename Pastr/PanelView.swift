@@ -87,12 +87,18 @@ struct PanelView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
 
-                NonCapturingTextField(
-                    text: $viewModel.searchText,
-                    placeholder: "Search",
-                    onArrowLeft: { viewModel.selectPrevious() },
-                    onArrowRight: { viewModel.selectNext() }
-                )
+                TextField("Search", text: $viewModel.searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white)
+                    .onKeyPress(.leftArrow) {
+                        viewModel.selectPrevious()
+                        return .handled
+                    }
+                    .onKeyPress(.rightArrow) {
+                        viewModel.selectNext()
+                        return .handled
+                    }
                 .frame(height: 18)
 
                 if !viewModel.searchText.isEmpty {
@@ -177,7 +183,6 @@ struct PanelView: View {
                         .fill(isCollectionSelected ? Color.white.opacity(0.18) : Color.clear)
                 )
             }
-            .menuStyle(.borderlessButton)
             .fixedSize()
 
             // Add Files button (only when viewing a collection)
@@ -239,7 +244,6 @@ struct PanelView: View {
                             .fill(isTagSelected ? Color.white.opacity(0.18) : Color.clear)
                     )
                 }
-                .menuStyle(.borderlessButton)
                 .fixedSize()
             }
 
@@ -667,7 +671,7 @@ private struct ClipboardCardView: View {
     }
 
     private var displaySize: DisplaySize {
-        settings.displaySize
+        settings.resolvedDisplaySize
     }
 
     /// Color tint based on clipboard item type
@@ -727,17 +731,10 @@ private struct ClipboardCardView: View {
                 Group {
                     switch item.type {
                     case .image:
-                        if let image = item.image {
-                            Image(nsImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: displaySize.cardWidth - 36, height: displaySize.cardHeight * 0.67)
-                                .clipped()
-                                .cornerRadius(8)
-                        } else {
-                            Text("Image")
-                                .foregroundColor(.white.opacity(0.7))
-                        }
+                        ClipboardImageView(item: item, contentMode: .fill)
+                            .frame(width: displaySize.cardWidth - 36, height: displaySize.cardHeight * 0.67)
+                            .clipped()
+                            .cornerRadius(8)
                     case .richText:
                         Text(item.cardPreviewText)
                             .font(.system(size: displaySize.baseFontSize - 2))
@@ -874,69 +871,6 @@ enum PanelSection: Hashable {
     }
 }
 
-// MARK: - Non-Capturing TextField
-
-struct NonCapturingTextField: NSViewRepresentable {
-    @Binding var text: String
-    let placeholder: String
-    let onArrowLeft: () -> Void
-    let onArrowRight: () -> Void
-
-    func makeNSView(context: Context) -> ArrowPassingTextField {
-        let field = ArrowPassingTextField()
-        field.delegate = context.coordinator
-        field.placeholderString = placeholder
-        field.isBordered = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.font = .systemFont(ofSize: 12)
-        field.textColor = .white
-        field.onArrowLeft = onArrowLeft
-        field.onArrowRight = onArrowRight
-        return field
-    }
-
-    func updateNSView(_ nsView: ArrowPassingTextField, context: Context) {
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    class Coordinator: NSObject, NSTextFieldDelegate {
-        let parent: NonCapturingTextField
-
-        init(_ parent: NonCapturingTextField) {
-            self.parent = parent
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            if let field = obj.object as? NSTextField {
-                parent.text = field.stringValue
-            }
-        }
-    }
-}
-
-final class ArrowPassingTextField: NSTextField {
-    var onArrowLeft: (() -> Void)?
-    var onArrowRight: (() -> Void)?
-
-    override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 123: // Left arrow
-            onArrowLeft?()
-        case 124: // Right arrow
-            onArrowRight?()
-        default:
-            super.keyDown(with: event)
-        }
-    }
-}
-
 // MARK: - Link Preview Card
 
 private struct LinkPreviewCard: View {
@@ -1069,16 +1003,9 @@ private struct ClipboardPreviewView: View {
             Group {
                 switch item.type {
                 case .image:
-                    if let image = item.image {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity, maxHeight: 160)
-                            .cornerRadius(8)
-                    } else {
-                        Text("Image")
-                            .foregroundColor(.secondary)
-                    }
+                    ClipboardImageView(item: item, contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 160)
+                        .cornerRadius(8)
                 case .richText:
                     ScrollView {
                         Text(item.detailPreviewText)
@@ -1141,6 +1068,43 @@ private struct ClipboardPreviewView: View {
             if let urlString = item.urlString {
                 linkService.fetchPreview(for: urlString)
             }
+        }
+    }
+}
+
+private struct ClipboardImageView: View {
+    let item: ClipboardItem
+    let contentMode: ContentMode
+
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+            } else {
+                ZStack {
+                    Color.white.opacity(0.04)
+                    Image(systemName: "photo")
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .onAppear(perform: loadImage)
+        .onChange(of: item.fingerprint) {
+            image = nil
+            loadImage()
+        }
+    }
+
+    private func loadImage() {
+        guard image == nil, let data = item.imageData else { return }
+        let fingerprint = item.fingerprint
+        ClipboardImageCache.shared.loadImage(for: fingerprint, data: data) { loaded in
+            guard item.fingerprint == fingerprint else { return }
+            image = loaded
         }
     }
 }

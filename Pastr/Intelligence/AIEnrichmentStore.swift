@@ -20,9 +20,15 @@ final class AIEnrichmentStore: ObservableObject {
     private let persistence = AIEnrichmentPersistence()
     private let queue = DispatchQueue(label: "pastr.ai.enrichment", qos: .utility)
     private var availabilityTask: Task<Void, Never>?
+    private var hasLoadedPersistence = false
+    private var pendingItems: [String: ClipboardItem] = [:]
 
     private init() {
-        enrichments = persistence.load()
+        persistence.loadAsync { [weak self] loaded in
+            DispatchQueue.main.async {
+                self?.finishLoading(loaded)
+            }
+        }
         if #available(macOS 26.0, *) {
             refreshAppleIntelligenceAvailability()
         } else {
@@ -63,6 +69,10 @@ final class AIEnrichmentStore: ObservableObject {
     /// or disabled. Runs off the main thread.
     func enrich(_ item: ClipboardItem) {
         guard settings.aiEnrichmentEnabled else { return }
+        guard hasLoadedPersistence else {
+            pendingItems[item.fingerprint] = item
+            return
+        }
 
         let existing = enrichments[item.fingerprint]
         if let existing, !existing.needsReprocessing, isComplete(existing, for: item) { return }
@@ -84,11 +94,46 @@ final class AIEnrichmentStore: ObservableObject {
     /// Re-run enrichment across a batch (e.g. on launch for clips missing data).
     func backfill(_ items: [ClipboardItem], limit: Int = 200) {
         guard settings.aiEnrichmentEnabled else { return }
+        guard hasLoadedPersistence else {
+            for item in items.prefix(limit) {
+                pendingItems[item.fingerprint] = item
+            }
+            return
+        }
+
         let pending = items.prefix(limit).filter { item in
             guard let e = enrichments[item.fingerprint] else { return true }
             return e.needsReprocessing || !isComplete(e, for: item)
         }
-        for item in pending { enrich(item) }
+        guard !pending.isEmpty else { return }
+
+        let existing = enrichments
+        let snapshot = SettingsSnapshot(settings)
+        queue.async { [weak self] in
+            guard let self else { return }
+            var completed: [String: AIEnrichment] = [:]
+            completed.reserveCapacity(pending.count)
+            for item in pending {
+                let result = Self.runPipeline(
+                    item,
+                    settings: snapshot,
+                    existing: existing[item.fingerprint]
+                )
+                completed[item.fingerprint] = result.enrichment
+            }
+
+            DispatchQueue.main.async {
+                self.enrichments.merge(completed, uniquingKeysWith: { _, newest in newest })
+                self.persist()
+                if snapshot.autoTagging {
+                    for item in pending {
+                        if let enrichment = completed[item.fingerprint] {
+                            self.applyAutoTags(enrichment, for: item)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func isComplete(_ e: AIEnrichment, for item: ClipboardItem) -> Bool {
@@ -245,8 +290,17 @@ final class AIEnrichmentStore: ObservableObject {
     // MARK: - Maintenance
 
     func remove(fingerprint: String) {
-        guard enrichments[fingerprint] != nil else { return }
-        enrichments.removeValue(forKey: fingerprint)
+        remove(fingerprints: [fingerprint])
+    }
+
+    func remove(fingerprints: Set<String>) {
+        guard !fingerprints.isEmpty,
+              fingerprints.contains(where: { enrichments[$0] != nil }) else { return }
+        var updated = enrichments
+        for fingerprint in fingerprints {
+            updated.removeValue(forKey: fingerprint)
+        }
+        enrichments = updated
         persist()
     }
 
@@ -270,6 +324,18 @@ final class AIEnrichmentStore: ObservableObject {
 
     private func persist() {
         persistence.save(enrichments)
+    }
+
+    private func finishLoading(_ loaded: [String: AIEnrichment]) {
+        guard !hasLoadedPersistence else { return }
+        var merged = loaded
+        merged.merge(enrichments, uniquingKeysWith: { _, current in current })
+        enrichments = merged
+        hasLoadedPersistence = true
+
+        let queuedItems = Array(pendingItems.values)
+        pendingItems.removeAll(keepingCapacity: false)
+        backfill(queuedItems, limit: queuedItems.count)
     }
 }
 
@@ -313,6 +379,12 @@ private final class AIEnrichmentPersistence {
             return [:]
         }
         return Dictionary(records.map { ($0.fingerprint, $0) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    func loadAsync(completion: @escaping ([String: AIEnrichment]) -> Void) {
+        queue.async { [weak self] in
+            completion(self?.load() ?? [:])
+        }
     }
 
     func save(_ enrichments: [String: AIEnrichment]) {

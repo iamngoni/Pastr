@@ -11,10 +11,6 @@ import SwiftUI
 struct PastrApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    init() {
-        SentryBootstrap.start()
-    }
-
     var body: some Scene {
         Settings {
             SettingsView(

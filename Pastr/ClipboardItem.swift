@@ -1,9 +1,10 @@
 import AppKit
 import Foundation
+import ImageIO
 
 struct ClipboardItem: Identifiable, nonisolated Hashable {
-    static let cardPreviewCharacterLimit = 2_000
-    static let detailPreviewCharacterLimit = 20_000
+    static let cardPreviewCharacterLimit = 800
+    static let detailPreviewCharacterLimit = 8_000
 
     let id: UUID
     let createdAt: Date
@@ -24,16 +25,12 @@ struct ClipboardItem: Identifiable, nonisolated Hashable {
         lhs.id == rhs.id &&
         lhs.createdAt == rhs.createdAt &&
         lhs.type == rhs.type &&
-        lhs.textContent?.count == rhs.textContent?.count &&
-        lhs.rtfData?.count == rhs.rtfData?.count &&
-        lhs.imageData?.count == rhs.imageData?.count &&
         lhs.urlString == rhs.urlString &&
         lhs.fileURLs == rhs.fileURLs &&
         lhs.sourceAppBundleId == rhs.sourceAppBundleId &&
         lhs.sourceAppName == rhs.sourceAppName &&
         lhs.isPinned == rhs.isPinned &&
         lhs.pinnedTitle == rhs.pinnedTitle &&
-        lhs.typesData.count == rhs.typesData.count &&
         lhs.fingerprint == rhs.fingerprint
     }
 
@@ -41,16 +38,12 @@ struct ClipboardItem: Identifiable, nonisolated Hashable {
         hasher.combine(id)
         hasher.combine(createdAt)
         hasher.combine(type)
-        hasher.combine(textContent?.count)
-        hasher.combine(rtfData?.count)
-        hasher.combine(imageData?.count)
         hasher.combine(urlString)
         hasher.combine(fileURLs)
         hasher.combine(sourceAppBundleId)
         hasher.combine(sourceAppName)
         hasher.combine(isPinned)
         hasher.combine(pinnedTitle)
-        hasher.combine(typesData.count)
         hasher.combine(fingerprint)
     }
 
@@ -188,6 +181,7 @@ final class ClipboardImageCache {
     static let shared = ClipboardImageCache()
 
     private let cache = NSCache<NSString, NSImage>()
+    private let decodeQueue = DispatchQueue(label: "pastr.image-preview-decode", qos: .userInitiated)
 
     private init() {
         cache.countLimit = 200
@@ -205,12 +199,46 @@ final class ClipboardImageCache {
         return image
     }
 
+    func loadImage(for fingerprint: String, data: Data, completion: @escaping (NSImage?) -> Void) {
+        let key = fingerprint as NSString
+        if let cached = cache.object(forKey: key) {
+            completion(cached)
+            return
+        }
+
+        decodeQueue.async { [weak self] in
+            guard let self else { return }
+            let image = Self.decodedImage(from: data)
+            if let image {
+                self.cache.setObject(image, forKey: key, cost: data.count)
+            }
+            DispatchQueue.main.async {
+                completion(image)
+            }
+        }
+    }
+
     func removeImage(for fingerprint: String) {
         cache.removeObject(forKey: fingerprint as NSString)
     }
 
     func clearCache() {
         cache.removeAllObjects()
+    }
+
+    private static func decodedImage(from data: Data) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(
+                source,
+                0,
+                [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+              ) else {
+            return nil
+        }
+        return NSImage(
+            cgImage: cgImage,
+            size: NSSize(width: cgImage.width, height: cgImage.height)
+        )
     }
 }
 

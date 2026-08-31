@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5 (2026-08-31)
+- Moved clipboard search and semantic matching off the main thread.
+- Moved CloudKit, on-device intelligence persistence, and image preview decoding off the main thread.
+- Reduced SwiftUI invalidations by publishing clipboard and enrichment updates in batches.
+- Improved responsiveness for large text, image, rich-text, and synced clipboard histories.
+- Fixed startup, search-field, display-sizing, and link-preview error-reporting hangs.
+
 ## v1.3 (2026-06-20)
 On-device intelligence — everything runs locally; your clipboard never leaves your Mac.
 

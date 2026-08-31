@@ -112,6 +112,14 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(displaySize.rawValue, forKey: Keys.displaySize) }
     }
 
+    /// The automatic size is refreshed by the panel controller before it presents on a screen.
+    /// Keeping it as state avoids querying AppKit repeatedly during SwiftUI layout.
+    @Published private(set) var detectedDisplaySize: DisplaySize = .regular
+
+    var resolvedDisplaySize: DisplaySize {
+        displaySize == .auto ? detectedDisplaySize : displaySize
+    }
+
     // MARK: - On-device Intelligence (Tier 1)
 
     /// Master switch for all deterministic on-device enrichment (OCR, classification,
@@ -306,6 +314,13 @@ final class SettingsStore: ObservableObject {
         guard let bundleId = bundleId else { return false }
         return ignoredAppBundleIds.contains { $0.lowercased() == bundleId.lowercased() }
     }
+
+    func updateDetectedDisplaySize(for screen: NSScreen) {
+        let detectedSize = DisplaySize.detected(for: screen)
+        if detectedDisplaySize != detectedSize {
+            detectedDisplaySize = detectedSize
+        }
+    }
 }
 
 enum LaunchAtLogin {
@@ -348,7 +363,7 @@ enum DisplaySize: String, CaseIterable, Identifiable {
     /// Scale factor for UI elements
     var scaleFactor: CGFloat {
         switch self {
-        case .auto: return DisplaySize.autoDetectedSize.scaleFactor
+        case .auto: return DisplaySize.regular.scaleFactor
         case .compact: return 0.85
         case .regular: return 1.0
         case .large: return 1.25
@@ -358,7 +373,7 @@ enum DisplaySize: String, CaseIterable, Identifiable {
     /// Card width in points
     var cardWidth: CGFloat {
         switch self {
-        case .auto: return DisplaySize.autoDetectedSize.cardWidth
+        case .auto: return DisplaySize.regular.cardWidth
         case .compact: return 200
         case .regular: return 240
         case .large: return 300
@@ -368,7 +383,7 @@ enum DisplaySize: String, CaseIterable, Identifiable {
     /// Card height in points
     var cardHeight: CGFloat {
         switch self {
-        case .auto: return DisplaySize.autoDetectedSize.cardHeight
+        case .auto: return DisplaySize.regular.cardHeight
         case .compact: return 150
         case .regular: return 180
         case .large: return 225
@@ -378,7 +393,7 @@ enum DisplaySize: String, CaseIterable, Identifiable {
     /// Panel width in points
     var panelWidth: CGFloat {
         switch self {
-        case .auto: return DisplaySize.autoDetectedSize.panelWidth
+        case .auto: return DisplaySize.regular.panelWidth
         case .compact: return 640
         case .regular: return 780
         case .large: return 960
@@ -388,7 +403,7 @@ enum DisplaySize: String, CaseIterable, Identifiable {
     /// Panel height in points
     var panelHeight: CGFloat {
         switch self {
-        case .auto: return DisplaySize.autoDetectedSize.panelHeight
+        case .auto: return DisplaySize.regular.panelHeight
         case .compact: return 420
         case .regular: return 500
         case .large: return 620
@@ -398,31 +413,24 @@ enum DisplaySize: String, CaseIterable, Identifiable {
     /// Base font size for card content
     var baseFontSize: CGFloat {
         switch self {
-        case .auto: return DisplaySize.autoDetectedSize.baseFontSize
+        case .auto: return DisplaySize.regular.baseFontSize
         case .compact: return 10
         case .regular: return 12
         case .large: return 14
         }
     }
 
-    /// Auto-detect appropriate size based on main screen
-    static var autoDetectedSize: DisplaySize {
-        guard let screen = NSScreen.main else { return .regular }
-        let width = screen.frame.width
-        let scaleFactor = screen.backingScaleFactor
+    static func detected(for screen: NSScreen) -> DisplaySize {
+        detected(forEffectivePixelWidth: screen.frame.width * screen.backingScaleFactor)
+    }
 
-        // Consider both resolution and scale factor
-        // High-DPI displays (Retina) have more physical pixels
-        let effectiveWidth = width * scaleFactor
-
-        if effectiveWidth >= 5120 { // 5K display or larger
+    static func detected(forEffectivePixelWidth effectiveWidth: CGFloat) -> DisplaySize {
+        if effectiveWidth >= 3_840 {
             return .large
-        } else if effectiveWidth >= 3840 { // 4K display
-            return .large
-        } else if effectiveWidth >= 2560 { // QHD or Retina MacBook
-            return .regular
-        } else {
-            return .compact
         }
+        if effectiveWidth >= 2_560 {
+            return .regular
+        }
+        return .compact
     }
 }

@@ -97,25 +97,27 @@ final class ClipboardHistoryStore: ObservableObject {
     func add(_ item: ClipboardItem) {
         locallyDeletedFingerprints.remove(item.fingerprint)
         let itemToPersist: ClipboardItem
-        if let existingIndex = items.firstIndex(where: { $0.fingerprint == item.fingerprint }) {
-            let existing = items[existingIndex]
+        var updatedItems = items
+        if let existingIndex = updatedItems.firstIndex(where: { $0.fingerprint == item.fingerprint }) {
+            let existing = updatedItems[existingIndex]
             var updated = item
             updated.isPinned = existing.isPinned
             updated.pinnedTitle = existing.pinnedTitle
-            items.remove(at: existingIndex)
-            items.insert(updated, at: 0)
+            updatedItems.remove(at: existingIndex)
+            updatedItems.insert(updated, at: 0)
             itemToPersist = updated
         } else {
-            items.insert(item, at: 0)
+            updatedItems.insert(item, at: 0)
             itemToPersist = item
         }
+        items = updatedItems
 
         let removed = prune()
         persistHistory()
         syncUpsert(itemToPersist)
         syncRemove(removed)
         enrichmentStore.enrich(itemToPersist)
-        removed.forEach { pruneDerivedDataIfOrphaned($0.fingerprint) }
+        pruneDerivedDataIfOrphaned(Set(removed.map(\.fingerprint)))
         SoundManager.playCopySound()
     }
 
@@ -224,7 +226,7 @@ final class ClipboardHistoryStore: ObservableObject {
         persistHistory()
         recordLocalDeletions([item])
         syncRemove([item])
-        pruneDerivedDataIfOrphaned(item.fingerprint)
+        pruneDerivedDataIfOrphaned([item.fingerprint])
     }
 
     func delete(_ itemsToDelete: [ClipboardItem]) {
@@ -233,14 +235,17 @@ final class ClipboardHistoryStore: ObservableObject {
         persistHistory()
         recordLocalDeletions(itemsToDelete)
         syncRemove(itemsToDelete)
-        itemsToDelete.forEach { pruneDerivedDataIfOrphaned($0.fingerprint) }
+        pruneDerivedDataIfOrphaned(Set(itemsToDelete.map(\.fingerprint)))
     }
 
-    /// Remove derived data for a fingerprint only if no remaining clip uses it.
-    private func pruneDerivedDataIfOrphaned(_ fingerprint: String) {
-        guard !items.contains(where: { $0.fingerprint == fingerprint }) else { return }
-        enrichmentStore.remove(fingerprint: fingerprint)
-        pruneCachesIfOrphaned(fingerprint)
+    /// Remove derived data for fingerprints only if no remaining clip uses them.
+    private func pruneDerivedDataIfOrphaned(_ fingerprints: Set<String>) {
+        let orphaned = fingerprints.filter { fingerprint in
+            !items.contains(where: { $0.fingerprint == fingerprint })
+        }
+        guard !orphaned.isEmpty else { return }
+        enrichmentStore.remove(fingerprints: Set(orphaned))
+        orphaned.forEach(pruneCachesIfOrphaned)
     }
 
     private func pruneCachesIfOrphaned(_ fingerprint: String) {
@@ -250,15 +255,31 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     func mergeCloudItems(_ cloudItems: [ClipboardItem]) {
-        for cloudItem in cloudItems where !locallyDeletedFingerprints.contains(cloudItem.fingerprint) {
-            if let index = items.firstIndex(where: { $0.fingerprint == cloudItem.fingerprint }) {
-                items[index] = cloudItem
-            } else {
-                items.insert(cloudItem, at: 0)
-            }
-        }
-        items.sort { $0.createdAt > $1.createdAt }
+        items = Self.mergedItems(
+            localItems: items,
+            cloudItems: cloudItems,
+            excluding: locallyDeletedFingerprints
+        )
         persistHistory()
+    }
+
+    static func mergedItems(
+        localItems: [ClipboardItem],
+        cloudItems: [ClipboardItem],
+        excluding deletedFingerprints: Set<String>
+    ) -> [ClipboardItem] {
+        var mergedByFingerprint = Dictionary(
+            localItems.map { ($0.fingerprint, $0) },
+            uniquingKeysWith: { existing, candidate in
+                candidate.createdAt > existing.createdAt ? candidate : existing
+            }
+        )
+
+        for cloudItem in cloudItems where !deletedFingerprints.contains(cloudItem.fingerprint) {
+            mergedByFingerprint[cloudItem.fingerprint] = cloudItem
+        }
+
+        return mergedByFingerprint.values.sorted { $0.createdAt > $1.createdAt }
     }
 
     func replaceAll(with newItems: [ClipboardItem]) {
@@ -269,8 +290,9 @@ final class ClipboardHistoryStore: ObservableObject {
         let currentFingerprints = Set(items.map { $0.fingerprint })
         locallyDeletedFingerprints.formUnion(oldFingerprints.subtracting(currentFingerprints))
         locallyDeletedFingerprints.subtract(currentFingerprints)
-        oldFingerprints.subtracting(currentFingerprints).forEach { fingerprint in
-            enrichmentStore.remove(fingerprint: fingerprint)
+        let removedFingerprints = oldFingerprints.subtracting(currentFingerprints)
+        enrichmentStore.remove(fingerprints: removedFingerprints)
+        removedFingerprints.forEach { fingerprint in
             AttributedStringCache.shared.removeAttributedString(for: fingerprint)
             ClipboardImageCache.shared.removeImage(for: fingerprint)
         }
@@ -418,8 +440,7 @@ final class ClipboardHistoryStore: ObservableObject {
 
     private func syncRemove(_ items: [ClipboardItem]) {
         guard settings.iCloudSyncEnabled, pinnedStore.isCloudSyncAvailable else { return }
-        let currentFingerprints = Set(self.items.map(\.fingerprint))
-        let fingerprints = Array(Set(items.map(\.fingerprint)).subtracting(currentFingerprints))
+        let fingerprints = Array(orphanedFingerprints(from: items))
         guard !fingerprints.isEmpty else { return }
         cloudSyncQueue.async { [pinnedStore] in
             try? pinnedStore.remove(fingerprints: fingerprints)
@@ -427,10 +448,24 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     private func recordLocalDeletions(_ removedItems: [ClipboardItem]) {
-        let currentFingerprints = Set(items.map(\.fingerprint))
-        for fingerprint in Set(removedItems.map(\.fingerprint)).subtracting(currentFingerprints) {
+        for fingerprint in orphanedFingerprints(from: removedItems) {
             locallyDeletedFingerprints.insert(fingerprint)
         }
+    }
+
+    private func orphanedFingerprints(from removedItems: [ClipboardItem]) -> Set<String> {
+        let candidates = Set(removedItems.map(\.fingerprint))
+        guard !candidates.isEmpty else { return [] }
+
+        // The common path removes one clip. Avoid rebuilding a Set for the entire history on
+        // every copy; use the full snapshot only for bulk cleanup operations.
+        if candidates.count <= 16 {
+            return candidates.filter { candidate in
+                !items.contains(where: { $0.fingerprint == candidate })
+            }
+        }
+        let currentFingerprints = Set(items.map(\.fingerprint))
+        return candidates.subtracting(currentFingerprints)
     }
 }
 

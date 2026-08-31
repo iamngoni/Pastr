@@ -18,6 +18,9 @@ enum SentryBootstrap {
             options.enableAppHangTracking = true
             options.appHangTimeoutInterval = 2
             options.enableWatchdogTerminationTracking = true
+            // Link previews intentionally tolerate failures from third-party websites. Reporting
+            // those responses as Pastr errors creates noisy issues for servers we do not control.
+            options.enableCaptureFailedRequests = false
             options.sendDefaultPii = false
 #if DEBUG
             options.environment = "development"
@@ -53,14 +56,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let clipboardActions = ClipboardActions()
     private var cancellables = Set<AnyCancellable>()
 
-    override init() {
-        super.init()
-        // All service singletons above are lazy so monitoring starts before persistence,
-        // CloudKit, pasteboard, model, or window initialization can fail or hang.
-        SentryBootstrap.start()
-    }
-
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // NSApplication is fully initialized here. Starting Sentry earlier can make its session
+        // tracker initialize NSApplication recursively during SwiftUI app bootstrap.
+        SentryBootstrap.start()
 
         NSApp.setActivationPolicy(.accessory)
 
