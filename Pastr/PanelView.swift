@@ -5,9 +5,12 @@ struct PanelView: View {
     @ObservedObject var viewModel: PanelViewModel
     @ObservedObject private var collectionStore = CollectionStore.shared
     @ObservedObject private var tagStore = TagStore.shared
-    @ObservedObject private var historyStore = ClipboardHistoryStore.shared
+    // Not observed: the panel doesn't render from these directly, and observing them made
+    // the (often hidden) panel redo SwiftUI work on every copy/enrichment (Sentry PASTR-3K).
+    // PanelWindowController forces a refresh each time the panel is shown.
+    private let historyStore = ClipboardHistoryStore.shared
     @ObservedObject private var settings = SettingsStore.shared
-    @ObservedObject private var enrichmentStore = AIEnrichmentStore.shared
+    private let enrichmentStore = AIEnrichmentStore.shared
     @StateObject private var ai = PanelAIController()
     let onSelect: (ClipboardItem) -> Void
     let onTogglePin: (ClipboardItem) -> Void
@@ -48,20 +51,37 @@ struct PanelView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.regularMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                    // Dark tint keeps the glass (and white text) consistent over bright windows.
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.black.opacity(0.32))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.22), Color.white.opacity(0.06)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
                 )
 
+            // AnyView boundaries keep the root view's generic type shallow; resolving the
+            // fully nested type at launch was a measurable hang (Sentry PASTR-3T).
             VStack(spacing: 12) {
-                header
-                cards
+                AnyView(header.padding(.horizontal, 16))
+                AnyView(cards)
             }
-            .padding(16)
+            .padding(.vertical, 14)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The panel is always styled as a dark glass surface (white text on material);
+        // pin the color scheme so light mode doesn't produce white-on-light.
+        .environment(\.colorScheme, .dark)
         .overlay(alignment: .bottom) {
             if let banner = ai.banner {
                 aiBanner(banner)
@@ -78,68 +98,104 @@ struct PanelView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Spacer()
+        ZStack {
+            // Leading: search. Trailing: count + settings.
+            HStack(spacing: 10) {
+                searchField
+                Spacer(minLength: 12)
+                Text(itemCountLabel)
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundColor(.white.opacity(0.45))
+                    .contentTransition(.numericText())
+                    .animation(.easeOut(duration: 0.2), value: viewModel.items.count)
 
-            // Search field
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                Button {
+                    onOpenSettings()
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Settings")
+            }
 
-                TextField("Search", text: $viewModel.searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white)
-                    .onKeyPress(.leftArrow) {
-                        viewModel.selectPrevious()
-                        return .handled
-                    }
-                    .onKeyPress(.rightArrow) {
-                        viewModel.selectNext()
-                        return .handled
-                    }
+            // Centered section switcher
+            sectionSwitcher
+        }
+    }
+
+    private var itemCountLabel: String {
+        let count = viewModel.items.count
+        return count == 1 ? "1 clip" : "\(count) clips"
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+
+            TextField("Search clips", text: $viewModel.searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(.white)
+                .onKeyPress(.leftArrow) {
+                    viewModel.selectPrevious()
+                    return .handled
+                }
+                .onKeyPress(.rightArrow) {
+                    viewModel.selectNext()
+                    return .handled
+                }
                 .frame(height: 18)
 
-                if !viewModel.searchText.isEmpty {
-                    Button {
-                        viewModel.searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.5))
-                    }
-                    .buttonStyle(.plain)
+            if !viewModel.searchText.isEmpty {
+                Button {
+                    viewModel.searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.5))
                 }
+                .buttonStyle(.plain)
+                .transition(.opacity)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.white.opacity(0.1))
-            )
-            .frame(width: 180)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .frame(width: 220)
+        .animation(.easeOut(duration: 0.15), value: viewModel.searchText.isEmpty)
+    }
 
-            // History tab
+    private var sectionSwitcher: some View {
+        HStack(spacing: 2) {
             Button {
                 viewModel.selectedSection = .history
                 viewModel.selectedIndex = 0
             } label: {
-                Text("History")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(viewModel.selectedSection == .history ? .white : .white.opacity(0.6))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(viewModel.selectedSection == .history ? Color.white.opacity(0.18) : Color.clear)
-                    )
+                SectionTabLabel(
+                    title: "History",
+                    systemImage: "clock",
+                    isSelected: viewModel.selectedSection == .history,
+                    showsChevron: false
+                )
             }
             .buttonStyle(.plain)
 
-            // Collections menu
             Menu {
-                // Show all collections with checkmark for currently selected
                 ForEach(collectionStore.collections) { collection in
                     Button {
                         viewModel.selectedSection = .collection(collection.id)
@@ -160,54 +216,24 @@ struct PanelView: View {
                     Divider()
                 }
 
-                // Create new collection
                 Button {
                     viewModel.showingCreateCollection = true
                 } label: {
                     Label("New Collection...", systemImage: "plus")
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 11))
-                    Text(collectionsTabTitle)
-                        .font(.system(size: 12, weight: .semibold))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
-                }
-                .foregroundColor(isCollectionSelected ? .white : .white.opacity(0.6))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isCollectionSelected ? Color.white.opacity(0.18) : Color.clear)
+                SectionTabLabel(
+                    title: collectionsTabTitle,
+                    systemImage: "folder",
+                    isSelected: isCollectionSelected,
+                    showsChevron: true
                 )
             }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
             .fixedSize()
 
-            // Add Files button (only when viewing a collection)
-            if case .collection(let collectionId) = viewModel.selectedSection {
-                Button {
-                    addFilesToCollection(collectionId)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Add Files")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundColor(.white.opacity(0.6))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.white.opacity(0.1))
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-
-            // Tags menu
             if !tagStore.tags.isEmpty {
                 Menu {
                     ForEach(tagStore.tags) { tag in
@@ -228,42 +254,47 @@ struct PanelView: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "tag.fill")
-                            .font(.system(size: 11))
-                        Text(tagsTabTitle)
-                            .font(.system(size: 12, weight: .semibold))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .semibold))
-                    }
-                    .foregroundColor(isTagSelected ? .white : .white.opacity(0.6))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(isTagSelected ? Color.white.opacity(0.18) : Color.clear)
+                    SectionTabLabel(
+                        title: tagsTabTitle,
+                        systemImage: "tag",
+                        isSelected: isTagSelected,
+                        showsChevron: true
                     )
                 }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
                 .fixedSize()
             }
 
-            // Settings button
-            Button {
-                onOpenSettings()
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-                    .padding(6)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.1))
+            if case .collection(let collectionId) = viewModel.selectedSection {
+                Divider()
+                    .frame(height: 14)
+                    .padding(.horizontal, 4)
+                Button {
+                    addFilesToCollection(collectionId)
+                } label: {
+                    SectionTabLabel(
+                        title: "Add Files",
+                        systemImage: "plus",
+                        isSelected: false,
+                        showsChevron: false
                     )
+                }
+                .buttonStyle(.plain)
+                .help("Add files to this collection")
             }
-            .buttonStyle(.plain)
-
-            Spacer()
         }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
+                )
+        )
+        .animation(.easeOut(duration: 0.15), value: viewModel.selectedSection)
     }
 
     private func addFilesToCollection(_ collectionId: UUID) {
@@ -314,6 +345,20 @@ struct PanelView: View {
     }
 
     private var cards: some View {
+        let displaySize = settings.resolvedDisplaySize
+        return ZStack {
+            if viewModel.items.isEmpty {
+                emptyState
+                    .frame(height: displaySize.cardHeight + 12)
+                    .transition(.opacity)
+            } else {
+                cardScroller(displaySize: displaySize)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: viewModel.items.isEmpty)
+    }
+
+    private func cardScroller(displaySize: DisplaySize) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
@@ -321,6 +366,9 @@ struct PanelView: View {
                         ClipboardCardView(
                             item: item,
                             isSelected: viewModel.isSelected(item),
+                            collectionColors: collectionStore.collections(containing: item.fingerprint).map(\.color),
+                            tags: tagStore.tags(for: item.fingerprint),
+                            displaySize: displaySize,
                             onTogglePin: { onTogglePin(item) }
                         )
                         .id(item.id)
@@ -353,8 +401,12 @@ struct PanelView: View {
                         }
                     }
                 }
-                .padding(.vertical, 4)
+                // Inset content so the first/last card (and its selection ring)
+                // sits clear of the edge fade.
+                .padding(.horizontal, 20)
+                .padding(.vertical, 6)
             }
+            .mask(edgeFade)
             .onChange(of: viewModel.selectedIndex) {
                 if let selectedItem = viewModel.selectedItem {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -362,6 +414,64 @@ struct PanelView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var edgeFade: some View {
+        HStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                .frame(width: 20)
+            Rectangle().fill(Color.black)
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: 20)
+        }
+    }
+
+    private var emptyState: some View {
+        let content = emptyStateContent
+        return VStack(spacing: 8) {
+            Image(systemName: content.icon)
+                .font(.system(size: 26, weight: .light))
+                .foregroundColor(.white.opacity(0.35))
+            Text(content.title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+            Text(content.message)
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.5))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 320)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var emptyStateContent: (icon: String, title: String, message: String) {
+        if !viewModel.searchText.isEmpty {
+            return (
+                "magnifyingglass",
+                "No matches for “\(viewModel.searchText)”",
+                "Try a different word, or search by what's in an image or what a clip means."
+            )
+        }
+        switch viewModel.selectedSection {
+        case .history, .pinned:
+            return (
+                "doc.on.clipboard",
+                "Nothing copied yet",
+                "Copy anything — text, links, images or files — and it will show up here."
+            )
+        case .collection:
+            return (
+                "folder",
+                "This collection is empty",
+                "Right-click a clip and choose Collections, or use Add Files."
+            )
+        case .tag:
+            return (
+                "tag",
+                "No clips with this tag",
+                "Right-click a clip and choose Tags to add it here."
+            )
         }
     }
 
@@ -374,11 +484,11 @@ struct PanelView: View {
         }
         .keyboardShortcut(.space, modifiers: [])
 
-        // Copy action
+        // Paste into the previously focused app
         Button {
             onSelect(item)
         } label: {
-            Label("Copy", systemImage: "doc.on.clipboard")
+            Label("Paste", systemImage: "doc.on.clipboard")
         }
         .keyboardShortcut(.return, modifiers: [])
 
@@ -653,192 +763,311 @@ struct PanelView: View {
     }
 }
 
+private struct SectionTabLabel: View {
+    let title: String
+    let systemImage: String
+    let isSelected: Bool
+    let showsChevron: Bool
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .medium))
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .opacity(0.7)
+            }
+        }
+        .foregroundColor(isSelected ? .white : .white.opacity(isHovering ? 0.85 : 0.6))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(isSelected ? 0.16 : (isHovering ? 0.07 : 0)))
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+    }
+}
+
+/// Clip card. Takes everything it renders as plain values so it doesn't observe
+/// the shared stores itself — a change in any store would otherwise redraw every card.
 private struct ClipboardCardView: View {
     let item: ClipboardItem
     let isSelected: Bool
+    let collectionColors: [String]
+    let tags: [Tag]
+    let displaySize: DisplaySize
     let onTogglePin: () -> Void
-    @ObservedObject private var linkService = LinkPreviewService.shared
-    @ObservedObject private var collectionStore = CollectionStore.shared
-    @ObservedObject private var tagStore = TagStore.shared
-    @ObservedObject private var settings = SettingsStore.shared
 
-    private var itemCollections: [Collection] {
-        collectionStore.collections(containing: item.fingerprint)
+    @State private var isHovering = false
+
+    private var scale: CGFloat { displaySize.scaleFactor }
+    private var typeColor: Color { item.type.tint }
+    private let cornerRadius: CGFloat = 14
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9 * scale) {
+            header
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            if !collectionColors.isEmpty || !tags.isEmpty {
+                footer
+            }
+        }
+        .padding(12 * scale)
+        .frame(width: displaySize.cardWidth, height: displaySize.cardHeight)
+        .background(background)
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: isSelected ? 2 : 1)
+        )
+        .shadow(
+            color: isSelected ? Color.white.opacity(0.18) : Color.black.opacity(isHovering ? 0.35 : 0.2),
+            radius: isSelected ? 8 : (isHovering ? 8 : 4),
+            y: isSelected ? 0 : (isHovering ? 4 : 2)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovering)
+        .animation(.easeOut(duration: 0.15), value: isSelected)
     }
 
-    private var itemTags: [Tag] {
-        tagStore.tags(for: item.fingerprint)
-    }
+    // MARK: Parts
 
-    private var displaySize: DisplaySize {
-        settings.resolvedDisplaySize
-    }
+    private var header: some View {
+        HStack(alignment: .center, spacing: 8 * scale) {
+            SourceAppIconView(item: item, size: 20 * scale)
 
-    /// Color tint based on clipboard item type
-    private var typeColor: Color {
-        switch item.type {
-        case .text:
-            return Color.blue
-        case .richText:
-            return Color.cyan
-        case .image:
-            return Color.green
-        case .link:
-            return Color.purple
-        case .file:
-            return Color.orange
-        case .other:
-            return Color.gray
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.sourceAppName ?? "Unknown App")
+                    .font(.system(size: 11 * scale, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+
+                HStack(spacing: 4 * scale) {
+                    Image(systemName: item.type.symbolName)
+                        .font(.system(size: 8 * scale, weight: .bold))
+                        .foregroundColor(typeColor)
+                    Text(item.type.label)
+                        .foregroundColor(typeColor.opacity(0.95))
+                    Text("·")
+                        .foregroundColor(.white.opacity(0.35))
+                    Text(item.relativeTime)
+                        .foregroundColor(.white.opacity(0.5))
+                        .lineLimit(1)
+                }
+                .font(.system(size: 10 * scale, weight: .medium))
+            }
+
+            Spacer(minLength: 4)
+
+            pinButton
         }
     }
 
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 6) {
-                // First row: App info and pin button space
-                HStack(spacing: 6) {
-                    if let icon = item.sourceAppIcon {
-                        Image(nsImage: icon)
-                            .resizable()
-                            .frame(width: 14 * displaySize.scaleFactor, height: 14 * displaySize.scaleFactor)
-                            .cornerRadius(3)
-                    }
+    private var pinButton: some View {
+        let visible = item.isPinned || isHovering || isSelected
+        return Button(action: onTogglePin) {
+            Image(systemName: item.isPinned ? "pin.fill" : "pin")
+                .font(.system(size: 11 * scale, weight: .semibold))
+                .foregroundColor(item.isPinned ? .yellow.opacity(0.9) : .white.opacity(0.7))
+                .rotationEffect(.degrees(item.isPinned ? 0 : 45))
+                .frame(width: 24 * scale, height: 24 * scale)
+                .background(Circle().fill(Color.white.opacity(isHovering ? 0.12 : 0.06)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .opacity(visible ? 1 : 0)
+        .allowsHitTesting(visible)
+        .help(item.isPinned ? "Unpin" : "Pin")
+    }
 
-                    if let appName = item.sourceAppName {
-                        Text(appName)
-                            .font(.system(size: 11 * displaySize.scaleFactor, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.7))
+    @ViewBuilder
+    private var content: some View {
+        switch item.type {
+        case .image:
+            ClipboardImageView(item: item, contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        case .richText:
+            Text(item.cardPreviewText)
+                .font(.system(size: displaySize.baseFontSize))
+                .foregroundColor(.white.opacity(0.92))
+                .lineSpacing(1.5)
+        case .text, .other:
+            if SyntaxHighlighter.isLikelyCode(item.cardPreviewText) {
+                Text(item.cardPreviewText)
+                    .font(.system(size: displaySize.baseFontSize - 1.5, weight: .regular, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.88))
+                    .padding(8 * scale)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.black.opacity(0.3))
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                Text(item.cardPreviewText)
+                    .font(.system(size: displaySize.baseFontSize + 1))
+                    .foregroundColor(.white.opacity(0.95))
+                    .lineSpacing(2)
+            }
+        case .link:
+            LinkPreviewCard(urlString: item.urlString ?? item.previewText)
+        case .file:
+            fileList
+        }
+    }
+
+    @ViewBuilder
+    private var fileList: some View {
+        if item.fileURLs.isEmpty {
+            Text(item.cardPreviewText)
+                .font(.system(size: displaySize.baseFontSize))
+                .foregroundColor(.white.opacity(0.92))
+        } else {
+            VStack(alignment: .leading, spacing: 6 * scale) {
+                ForEach(item.fileURLs.prefix(3), id: \.self) { url in
+                    HStack(spacing: 6 * scale) {
+                        Image(systemName: url.hasDirectoryPath ? "folder.fill" : "doc.fill")
+                            .font(.system(size: 12 * scale))
+                            .foregroundColor(typeColor)
+                        Text(url.lastPathComponent)
+                            .font(.system(size: displaySize.baseFontSize, weight: .medium))
+                            .foregroundColor(.white.opacity(0.92))
                             .lineLimit(1)
+                            .truncationMode(.middle)
                     }
-
-                    Spacer()
                 }
-                .padding(.trailing, 32) // Space for pin button
-
-                // Second row: Type and time
-                HStack(spacing: 6) {
-                    Text(item.type.label)
-                        .font(.system(size: 10 * displaySize.scaleFactor, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.6))
-
-                    Text(item.relativeTime)
-                        .font(.system(size: 10 * displaySize.scaleFactor))
+                if item.fileURLs.count > 3 {
+                    Text("+\(item.fileURLs.count - 3) more")
+                        .font(.system(size: 10 * scale, weight: .medium))
                         .foregroundColor(.white.opacity(0.5))
-
-                    Spacer()
-                }
-
-                Group {
-                    switch item.type {
-                    case .image:
-                        ClipboardImageView(item: item, contentMode: .fill)
-                            .frame(width: displaySize.cardWidth - 36, height: displaySize.cardHeight * 0.67)
-                            .clipped()
-                            .cornerRadius(8)
-                    case .richText:
-                        Text(item.cardPreviewText)
-                            .font(.system(size: displaySize.baseFontSize - 2))
-                            .foregroundColor(.white)
-                            .lineLimit(10)
-                    case .text, .other:
-                        if SyntaxHighlighter.isLikelyCode(item.cardPreviewText) {
-                            Text(item.cardPreviewText)
-                                .font(.system(size: displaySize.baseFontSize - 2, weight: .regular, design: .monospaced))
-                                .foregroundColor(.white)
-                                .lineLimit(10)
-                        } else {
-                            Text(item.cardPreviewText)
-                                .font(.system(size: displaySize.baseFontSize))
-                                .foregroundColor(.white)
-                                .lineLimit(6)
-                        }
-                    case .link:
-                        LinkPreviewCard(urlString: item.urlString ?? item.previewText)
-                    case .file:
-                        Text(item.cardPreviewText)
-                            .font(.system(size: displaySize.baseFontSize))
-                            .foregroundColor(.white)
-                            .lineLimit(3)
-                    }
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(12 * displaySize.scaleFactor)
-            .frame(width: displaySize.cardWidth, height: displaySize.cardHeight)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.black.opacity(0.35))
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(typeColor.opacity(0.12))
-                }
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(isSelected ? Color.white.opacity(0.95) : Color.white.opacity(0.08), lineWidth: isSelected ? 1.6 : 1)
-            )
-            .shadow(color: isSelected ? Color.white.opacity(0.25) : .clear, radius: 6, x: 0, y: 0)
-
-            VStack(alignment: .trailing, spacing: 4 * displaySize.scaleFactor) {
-                // Pin button
-                Button(action: onTogglePin) {
-                    Image(systemName: item.isPinned ? "pin.fill" : "pin")
-                        .font(.system(size: 12 * displaySize.scaleFactor, weight: .semibold))
-                        .foregroundColor(.white.opacity(item.isPinned ? 0.9 : 0.6))
-                        .padding(6 * displaySize.scaleFactor)
-                        .background(Circle().fill(Color.black.opacity(0.4)))
-                }
-                .buttonStyle(.plain)
-
-                // Collection indicators
-                if !itemCollections.isEmpty {
-                    HStack(spacing: 2 * displaySize.scaleFactor) {
-                        ForEach(itemCollections.prefix(3)) { collection in
-                            Circle()
-                                .fill(Color(hex: collection.color))
-                                .frame(width: 8 * displaySize.scaleFactor, height: 8 * displaySize.scaleFactor)
-                        }
-                        if itemCollections.count > 3 {
-                            Text("+\(itemCollections.count - 3)")
-                                .font(.system(size: 8 * displaySize.scaleFactor, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-                    }
-                    .padding(.horizontal, 6 * displaySize.scaleFactor)
-                    .padding(.vertical, 3 * displaySize.scaleFactor)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.4))
-                    )
-                }
-
-                // Tag indicators
-                if !itemTags.isEmpty {
-                    HStack(spacing: 2 * displaySize.scaleFactor) {
-                        Image(systemName: "tag.fill")
-                            .font(.system(size: 7 * displaySize.scaleFactor))
-                            .foregroundColor(.white.opacity(0.6))
-                        ForEach(itemTags.prefix(2)) { tag in
-                            Text(tag.name)
-                                .font(.system(size: 7 * displaySize.scaleFactor, weight: .medium))
-                                .foregroundColor(Color(hex: tag.color))
-                        }
-                        if itemTags.count > 2 {
-                            Text("+\(itemTags.count - 2)")
-                                .font(.system(size: 7 * displaySize.scaleFactor, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.6))
-                        }
-                    }
-                    .padding(.horizontal, 6 * displaySize.scaleFactor)
-                    .padding(.vertical, 3 * displaySize.scaleFactor)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.4))
-                    )
                 }
             }
-            .padding(6)
+        }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 6 * scale) {
+            if !collectionColors.isEmpty {
+                HStack(spacing: -3 * scale) {
+                    ForEach(Array(collectionColors.prefix(3).enumerated()), id: \.offset) { _, hex in
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 9 * scale, height: 9 * scale)
+                            .overlay(Circle().strokeBorder(Color.black.opacity(0.4), lineWidth: 1))
+                    }
+                }
+                .help("In \(collectionColors.count) collection\(collectionColors.count == 1 ? "" : "s")")
+            }
+
+            ForEach(tags.prefix(2)) { tag in
+                HStack(spacing: 3 * scale) {
+                    Circle()
+                        .fill(Color(hex: tag.color))
+                        .frame(width: 6 * scale, height: 6 * scale)
+                    Text(tag.name)
+                        .lineLimit(1)
+                }
+                .font(.system(size: 9 * scale, weight: .semibold))
+                .foregroundColor(.white.opacity(0.8))
+                .padding(.horizontal, 6 * scale)
+                .padding(.vertical, 2 * scale)
+                .background(Capsule().fill(Color(hex: tag.color).opacity(0.18)))
+            }
+
+            if tags.count > 2 {
+                Text("+\(tags.count - 2)")
+                    .font(.system(size: 9 * scale, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.55))
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var background: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.black.opacity(isHovering ? 0.26 : 0.32))
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [typeColor.opacity(0.2), typeColor.opacity(0.04)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        }
+    }
+
+    private var borderColor: Color {
+        if isSelected { return Color.white.opacity(0.9) }
+        if isHovering { return Color.white.opacity(0.22) }
+        return Color.white.opacity(0.08)
+    }
+}
+
+/// Source app icon with graceful fallbacks (Universal Clipboard / unknown app).
+private struct SourceAppIconView: View {
+    let item: ClipboardItem
+    let size: CGFloat
+    // Observed so the card refreshes when the icon finishes loading in the background.
+    @ObservedObject private var iconCache = AppIconCache.shared
+
+    var body: some View {
+        if let bundleID = item.sourceAppBundleId, let icon = iconCache.icon(forBundleID: bundleID) {
+            Image(nsImage: icon)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        } else {
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(Color.white.opacity(0.1))
+                .frame(width: size, height: size)
+                .overlay(
+                    Image(systemName: item.sourceAppBundleId == nil ? "iphone" : "app.dashed")
+                        .font(.system(size: size * 0.52, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                )
+        }
+    }
+}
+
+private extension ClipboardItemType {
+    var symbolName: String {
+        switch self {
+        case .text: return "text.alignleft"
+        case .richText: return "textformat"
+        case .image: return "photo"
+        case .link: return "link"
+        case .file: return "doc"
+        case .other: return "square.dashed"
+        }
+    }
+
+    /// Slightly lifted hues so they read well on the dark glass panel.
+    var tint: Color {
+        switch self {
+        case .text: return Color(red: 0.45, green: 0.66, blue: 1.0)
+        case .richText: return Color(red: 0.38, green: 0.84, blue: 0.92)
+        case .image: return Color(red: 0.42, green: 0.86, blue: 0.55)
+        case .link: return Color(red: 0.74, green: 0.56, blue: 1.0)
+        case .file: return Color(red: 1.0, green: 0.68, blue: 0.35)
+        case .other: return Color(white: 0.7)
         }
     }
 }
