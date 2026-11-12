@@ -5,10 +5,33 @@ struct Collection: Identifiable, Codable, Hashable {
     var name: String
     var icon: String  // SF Symbol name
     var color: String // Hex color
-    var itemFingerprints: [String]  // Track items by fingerprint for deduplication
+    var itemFingerprints: [String] {  // Track items by fingerprint for deduplication
+        didSet { fingerprintSet = Set(itemFingerprints) }
+    }
     var createdAt: Date
     var updatedAt: Date
     var sortOrder: Int
+
+    /// O(1) membership cache mirroring `itemFingerprints`; never encoded.
+    private var fingerprintSet: Set<String> = []
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, icon, color, itemFingerprints, createdAt, updatedAt, sortOrder
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        icon = try container.decode(String.self, forKey: .icon)
+        color = try container.decode(String.self, forKey: .color)
+        let fingerprints = try container.decode([String].self, forKey: .itemFingerprints)
+        itemFingerprints = fingerprints
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        sortOrder = try container.decode(Int.self, forKey: .sortOrder)
+        fingerprintSet = Set(fingerprints)
+    }
 
     init(
         id: UUID = UUID(),
@@ -25,13 +48,14 @@ struct Collection: Identifiable, Codable, Hashable {
         self.icon = icon
         self.color = color
         self.itemFingerprints = itemFingerprints
+        self.fingerprintSet = Set(itemFingerprints)
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.sortOrder = sortOrder
     }
 
     mutating func addItem(fingerprint: String) {
-        if !itemFingerprints.contains(fingerprint) {
+        if !fingerprintSet.contains(fingerprint) {
             itemFingerprints.append(fingerprint)
             updatedAt = Date()
         }
@@ -43,7 +67,7 @@ struct Collection: Identifiable, Codable, Hashable {
     }
 
     func contains(fingerprint: String) -> Bool {
-        itemFingerprints.contains(fingerprint)
+        fingerprintSet.contains(fingerprint)
     }
 }
 

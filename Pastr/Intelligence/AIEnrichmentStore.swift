@@ -22,6 +22,8 @@ final class AIEnrichmentStore: ObservableObject {
     private var availabilityTask: Task<Void, Never>?
     private var hasLoadedPersistence = false
     private var pendingItems: [String: ClipboardItem] = [:]
+    /// Removals requested before the on-disk store finished loading; applied once it has.
+    private var pendingRemovals: Set<String> = []
 
     private init() {
         persistence.loadAsync { [weak self] loaded in
@@ -82,6 +84,9 @@ final class AIEnrichmentStore: ObservableObject {
             guard let self else { return }
             let result = Self.runPipeline(item, settings: snapshot, existing: existing)
             DispatchQueue.main.async {
+                // The clip may have been deleted while it was being enriched; don't resurrect
+                // its enrichment or auto-tags.
+                guard Self.isStillInHistory(item.fingerprint) else { return }
                 self.enrichments[item.fingerprint] = result.enrichment
                 self.persist()
                 if snapshot.autoTagging {
@@ -89,6 +94,13 @@ final class AIEnrichmentStore: ObservableObject {
                 }
             }
         }
+    }
+
+    private static func isStillInHistory(_ fingerprint: String) -> Bool {
+        let history = ClipboardHistoryStore.shared
+        guard history.hasLoadedHistory else { return true }
+        return history.items.contains { $0.fingerprint == fingerprint }
+            || CollectionStore.shared.isItemInAnyCollection(fingerprint: fingerprint)
     }
 
     /// Re-run enrichment across a batch (e.g. on launch for clips missing data).
@@ -123,6 +135,14 @@ final class AIEnrichmentStore: ObservableObject {
             }
 
             DispatchQueue.main.async {
+                // Drop results for clips deleted while the batch ran.
+                let history = ClipboardHistoryStore.shared
+                let live = history.hasLoadedHistory ? Set(history.items.map(\.fingerprint)) : nil
+                let completed = completed.filter { entry in
+                    guard let live else { return true }
+                    return live.contains(entry.key)
+                        || CollectionStore.shared.isItemInAnyCollection(fingerprint: entry.key)
+                }
                 self.enrichments.merge(completed, uniquingKeysWith: { _, newest in newest })
                 self.persist()
                 if snapshot.autoTagging {
@@ -294,8 +314,12 @@ final class AIEnrichmentStore: ObservableObject {
     }
 
     func remove(fingerprints: Set<String>) {
-        guard !fingerprints.isEmpty,
-              fingerprints.contains(where: { enrichments[$0] != nil }) else { return }
+        guard !fingerprints.isEmpty else { return }
+        if !hasLoadedPersistence {
+            pendingRemovals.formUnion(fingerprints)
+            for fingerprint in fingerprints { pendingItems.removeValue(forKey: fingerprint) }
+        }
+        guard fingerprints.contains(where: { enrichments[$0] != nil }) else { return }
         var updated = enrichments
         for fingerprint in fingerprints {
             updated.removeValue(forKey: fingerprint)
@@ -326,12 +350,21 @@ final class AIEnrichmentStore: ObservableObject {
         persistence.save(enrichments)
     }
 
+    /// Write any pending enrichment snapshot to disk immediately (app termination).
+    func flush() {
+        persistence.flush()
+    }
+
     private func finishLoading(_ loaded: [String: AIEnrichment]) {
         guard !hasLoadedPersistence else { return }
         var merged = loaded
         merged.merge(enrichments, uniquingKeysWith: { _, current in current })
+        let removals = pendingRemovals
+        pendingRemovals.removeAll()
+        for fingerprint in removals { merged.removeValue(forKey: fingerprint) }
         enrichments = merged
         hasLoadedPersistence = true
+        if !removals.isEmpty { persist() }
 
         let queuedItems = Array(pendingItems.values)
         pendingItems.removeAll(keepingCapacity: false)
@@ -363,8 +396,9 @@ private final class AIEnrichmentPersistence {
     private let fileURL: URL
     private let queue = DispatchQueue(label: "pastr.ai-enrichment.persistence", qos: .utility)
     private let stateLock = NSLock()
-    private var pendingRecords: [AIEnrichment]?
-    private var writerIsRunning = false
+    private let debounceInterval: TimeInterval = 1.5
+    private var pendingSnapshot: [String: AIEnrichment]?
+    private var writeIsScheduled = false
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -387,37 +421,37 @@ private final class AIEnrichmentPersistence {
         }
     }
 
+    /// Stores the dictionary (copy-on-write, O(1)) and schedules a debounced write. The
+    /// `Array(values)` copy and JSON encode happen on the persistence queue.
     func save(_ enrichments: [String: AIEnrichment]) {
-        let records = Array(enrichments.values)
         stateLock.lock()
-        pendingRecords = records
-        guard !writerIsRunning else {
-            stateLock.unlock()
-            return
-        }
-        writerIsRunning = true
+        pendingSnapshot = enrichments
+        let needsSchedule = !writeIsScheduled
+        writeIsScheduled = true
         stateLock.unlock()
 
-        queue.async { [weak self] in
-            self?.drainPendingSaves()
+        guard needsSchedule else { return }
+        queue.asyncAfter(deadline: .now() + debounceInterval) { [weak self] in
+            self?.writePendingSnapshot()
         }
     }
 
-    private func drainPendingSaves() {
-        while true {
-            stateLock.lock()
-            guard let records = pendingRecords else {
-                writerIsRunning = false
-                stateLock.unlock()
-                return
-            }
-            pendingRecords = nil
-            stateLock.unlock()
+    /// Synchronously write any pending snapshot (app termination).
+    func flush() {
+        queue.sync { writePendingSnapshot() }
+    }
 
-            autoreleasepool {
-                guard let data = try? JSONEncoder().encode(records) else { return }
-                try? data.write(to: fileURL, options: .atomic)
-            }
+    private func writePendingSnapshot() {
+        stateLock.lock()
+        writeIsScheduled = false
+        let snapshot = pendingSnapshot
+        pendingSnapshot = nil
+        stateLock.unlock()
+
+        guard let snapshot else { return }
+        autoreleasepool {
+            guard let data = try? JSONEncoder().encode(Array(snapshot.values)) else { return }
+            try? data.write(to: fileURL, options: .atomic)
         }
     }
 }

@@ -1,3 +1,4 @@
+import Combine
 import AppKit
 import QuartzCore
 import ScreenCaptureKit
@@ -63,7 +64,18 @@ final class PanelWindowController {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
+        // The panel is designed as dark glass; force the window appearance so the SwiftUI
+        // material doesn't render light (washed-out, low-contrast) in system light mode.
+        panel.appearance = NSAppearance(named: .darkAqua)
 
+        self.panel = panel
+    }
+
+    /// Builds the SwiftUI content on first use instead of during app launch. Instantiating
+    /// the panel's view graph synchronously in applicationDidFinishLaunching showed up as
+    /// launch hangs on memory-constrained Macs (Sentry PASTR-3T / PASTR-3S).
+    private func installContentIfNeeded() {
+        guard panel.contentView as? NSHostingView<PanelView> == nil else { return }
         let rootView = PanelView(
             viewModel: viewModel,
             onSelect: onSelect,
@@ -78,8 +90,11 @@ final class PanelWindowController {
             onRemoveFromCollection: onRemoveFromCollection
         )
         panel.contentView = NSHostingView(rootView: rootView)
+    }
 
-        self.panel = panel
+    /// Builds the panel content once the app has settled, so the first open is still instant.
+    func prewarm() {
+        installContentIfNeeded()
     }
 
     deinit {
@@ -98,7 +113,10 @@ final class PanelWindowController {
         let targetFrame = panelFrame(for: screen)
         let startFrame = targetFrame.offsetBy(dx: 0, dy: -targetFrame.height - 12)
 
+        installContentIfNeeded()
         viewModel.resetSelection()
+        // PanelView doesn't observe every store (to avoid work while hidden), so refresh once on show.
+        viewModel.objectWillChange.send()
         NSApp.activate(ignoringOtherApps: true)
         panel.setFrame(startFrame, display: true)
         panel.makeKeyAndOrderFront(nil)

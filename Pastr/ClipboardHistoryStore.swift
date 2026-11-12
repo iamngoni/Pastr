@@ -29,7 +29,7 @@ final class ClipboardHistoryStore: ObservableObject {
     private lazy var enrichmentStore = AIEnrichmentStore.shared
     private let cloudSyncQueue = DispatchQueue(label: "pastr.cloud-sync", qos: .utility)
     private var cancellables = Set<AnyCancellable>()
-    private var hasLoadedHistory = false
+    private(set) var hasLoadedHistory = false
     private var initialLoadPolicy: InitialLoadPolicy = .mergeAll
     private var locallyDeletedFingerprints: Set<String> = []
 
@@ -52,6 +52,7 @@ final class ClipboardHistoryStore: ObservableObject {
             itemsToMerge = []
         }
 
+        let liveItemsBeforeLoad = items
         if initialLoadPolicy != .discard {
             var mergedByFingerprint = Dictionary(
                 itemsToMerge.map { ($0.fingerprint, $0) },
@@ -75,8 +76,17 @@ final class ClipboardHistoryStore: ObservableObject {
         let currentFingerprints = Set(items.map(\.fingerprint))
         let excludedByPolicy = loadedItems.filter { !currentFingerprints.contains($0.fingerprint) }
         recordLocalDeletions(excludedByPolicy + prunedItems)
-        persistHistory()
+        // Only rewrite history.json when the merge actually differs from what is on disk.
+        let diskIsStale = !liveItemsBeforeLoad.isEmpty
+            || !prunedItems.isEmpty
+            || !excludedByPolicy.isEmpty
+            || initialLoadPolicy != .mergeAll
+            || items.count != loadedItems.count
+        if diskIsStale {
+            persistHistory()
+        }
         syncRemove(excludedByPolicy + prunedItems)
+        pruneDerivedDataIfOrphaned(Set((excludedByPolicy + prunedItems).map(\.fingerprint)))
         bindSettings()
         migrateToCollections()
         // Enrich any clips loaded from disk that don't yet have on-device intelligence.
@@ -86,6 +96,11 @@ final class ClipboardHistoryStore: ObservableObject {
     private func persistHistory() {
         guard hasLoadedHistory else { return }
         persistence.save(items)
+    }
+
+    /// Synchronously write any debounced history snapshot (app termination).
+    func flushPendingWrites() {
+        persistence.flush()
     }
 
     /// Migrate from isPinned to collections system
@@ -216,7 +231,11 @@ final class ClipboardHistoryStore: ObservableObject {
         recordLocalDeletions(removed)
         syncRemove(removed)
         if hasLoadedHistory {
-            enrichmentStore.prune(keeping: Set(items.map { $0.fingerprint }))
+            let orphaned = orphanedFingerprints(from: removed)
+            // remove(fingerprints:) also queues removals if enrichments haven't loaded yet,
+            // so they aren't merged back from disk afterwards.
+            enrichmentStore.remove(fingerprints: orphaned)
+            TagStore.shared.removeAllTags(fromFingerprints: orphaned)
             removed.forEach { pruneCachesIfOrphaned($0.fingerprint) }
         }
     }
@@ -240,11 +259,11 @@ final class ClipboardHistoryStore: ObservableObject {
 
     /// Remove derived data for fingerprints only if no remaining clip uses them.
     private func pruneDerivedDataIfOrphaned(_ fingerprints: Set<String>) {
-        let orphaned = fingerprints.filter { fingerprint in
-            !items.contains(where: { $0.fingerprint == fingerprint })
-        }
+        guard !fingerprints.isEmpty else { return }
+        let orphaned = orphanedFingerprints(from: fingerprints)
         guard !orphaned.isEmpty else { return }
-        enrichmentStore.remove(fingerprints: Set(orphaned))
+        enrichmentStore.remove(fingerprints: orphaned)
+        TagStore.shared.removeAllTags(fromFingerprints: orphaned)
         orphaned.forEach(pruneCachesIfOrphaned)
     }
 
@@ -255,12 +274,29 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     func mergeCloudItems(_ cloudItems: [ClipboardItem]) {
-        items = Self.mergedItems(
+        let merged = Self.mergedItems(
             localItems: items,
             cloudItems: cloudItems,
             excluding: locallyDeletedFingerprints
         )
+        // Skip publishing/persisting when the merge is a no-op (the common case for remote
+        // change notifications triggered by our own writes).
+        guard !Self.hasSameHistory(merged, items) else { return }
+        items = merged
         persistHistory()
+    }
+
+    private static func hasSameHistory(_ lhs: [ClipboardItem], _ rhs: [ClipboardItem]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        for (a, b) in zip(lhs, rhs) {
+            if a.fingerprint != b.fingerprint
+                || a.createdAt != b.createdAt
+                || a.isPinned != b.isPinned
+                || a.pinnedTitle != b.pinnedTitle {
+                return false
+            }
+        }
+        return true
     }
 
     static func mergedItems(
@@ -292,6 +328,7 @@ final class ClipboardHistoryStore: ObservableObject {
         locallyDeletedFingerprints.subtract(currentFingerprints)
         let removedFingerprints = oldFingerprints.subtracting(currentFingerprints)
         enrichmentStore.remove(fingerprints: removedFingerprints)
+        TagStore.shared.removeAllTags(fromFingerprints: removedFingerprints)
         removedFingerprints.forEach { fingerprint in
             AttributedStringCache.shared.removeAttributedString(for: fingerprint)
             ClipboardImageCache.shared.removeImage(for: fingerprint)
@@ -395,6 +432,7 @@ final class ClipboardHistoryStore: ObservableObject {
                 self.persistHistory()
                 self.recordLocalDeletions(removed)
                 self.syncRemove(removed)
+                self.pruneDerivedDataIfOrphaned(Set(removed.map(\.fingerprint)))
             }
             .store(in: &cancellables)
 
@@ -454,18 +492,26 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     private func orphanedFingerprints(from removedItems: [ClipboardItem]) -> Set<String> {
-        let candidates = Set(removedItems.map(\.fingerprint))
+        orphanedFingerprints(from: Set(removedItems.map(\.fingerprint)))
+    }
+
+    private func orphanedFingerprints(from candidates: Set<String>) -> Set<String> {
         guard !candidates.isEmpty else { return [] }
 
         // The common path removes one clip. Avoid rebuilding a Set for the entire history on
         // every copy; use the full snapshot only for bulk cleanup operations.
+        let orphaned: Set<String>
         if candidates.count <= 16 {
-            return candidates.filter { candidate in
+            orphaned = candidates.filter { candidate in
                 !items.contains(where: { $0.fingerprint == candidate })
             }
+        } else {
+            let currentFingerprints = Set(items.map(\.fingerprint))
+            orphaned = candidates.subtracting(currentFingerprints)
         }
-        let currentFingerprints = Set(items.map(\.fingerprint))
-        return candidates.subtracting(currentFingerprints)
+        // Collections keep membership by fingerprint after a clip leaves history; keep its
+        // tags/enrichment too so the clip comes back whole if it's re-copied.
+        return orphaned.filter { !collectionStore.isItemInAnyCollection(fingerprint: $0) }
     }
 }
 

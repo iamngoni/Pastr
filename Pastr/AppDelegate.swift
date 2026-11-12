@@ -98,6 +98,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
+        // Build the panel's SwiftUI content after launch settles rather than inline
+        // (launch hangs, Sentry PASTR-3T / PASTR-3S).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.panelWindowController?.prewarm()
+        }
+
         statusBarController = StatusBarController(
             onToggle: { [weak self] in
                 self?.togglePanel()
@@ -175,6 +181,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyManager.unregisterHotKey()
         hotCornerMonitor.stop()
         clipboardMonitor?.stop()
+        // Debounced writers: force any pending snapshots to disk before exit.
+        ClipboardHistoryStore.shared.flushPendingWrites()
+        AIEnrichmentStore.shared.flush()
+        TagStore.shared.flush()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

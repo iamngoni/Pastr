@@ -27,6 +27,8 @@ final class ClipboardMonitor {
     private static let imageTypes: Set<NSPasteboard.PasteboardType> = [.tiff, .png, .pdf]
     private static let explicitStoredTypes: Set<NSPasteboard.PasteboardType> = [.string, .rtf, .URL, .tiff, .png, .pdf]
     private static let maxStoredRepresentationBytes = 2 * 1024 * 1024
+    /// Plain text larger than this (UTF-8 bytes) is not stored at all.
+    private static let maxStoredTextBytes = 5 * 1024 * 1024
     private static let maxStoredRepresentationsTotalBytes = 8 * 1024 * 1024
     private static let maxCapturedImageBytes = 25 * 1024 * 1024
     private static let maxNormalizedImageBytes = 8 * 1024 * 1024
@@ -43,7 +45,7 @@ final class ClipboardMonitor {
     func start() {
         stop()
         let timer = DispatchSource.makeTimerSource(queue: monitorQueue)
-        timer.schedule(deadline: .now(), repeating: .milliseconds(450))
+        timer.schedule(deadline: .now(), repeating: .milliseconds(450), leeway: .milliseconds(100))
         timer.setEventHandler { [weak self] in
             self?.pollPasteboard()
         }
@@ -131,6 +133,11 @@ final class ClipboardMonitor {
             sourceBundleId: bundleId,
             sourceName: appName
         )
+
+        // Skip oversized text payloads rather than persisting/encoding multi-MB strings.
+        if let text = item.textContent, text.utf8.count > ClipboardMonitor.maxStoredTextBytes {
+            return
+        }
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }

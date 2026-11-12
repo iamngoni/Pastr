@@ -5,10 +5,12 @@ final class HistoryPersistence {
     private let fileURL: URL
     private let queue = DispatchQueue(label: "pastr.history.persistence", qos: .utility)
     private let stateLock = NSLock()
+    private let debounceInterval: TimeInterval
     private var pendingItems: [ClipboardItem]?
-    private var writerIsRunning = false
+    private var writeIsScheduled = false
 
-    init(fileURL: URL? = nil) {
+    init(fileURL: URL? = nil, debounceInterval: TimeInterval = 1.5) {
+        self.debounceInterval = debounceInterval
         if let fileURL {
             self.fileURL = fileURL
             return
@@ -32,42 +34,43 @@ final class HistoryPersistence {
         }
     }
 
+    /// Record the latest snapshot. Writes are coalesced: only the newest snapshot is encoded,
+    /// at most `debounceInterval` seconds after the first unsaved change.
     func save(_ items: [ClipboardItem]) {
         stateLock.lock()
         pendingItems = items
-        guard !writerIsRunning else {
-            stateLock.unlock()
-            return
-        }
-        writerIsRunning = true
+        let needsSchedule = !writeIsScheduled
+        writeIsScheduled = true
         stateLock.unlock()
 
-        queue.async { [weak self] in
-            self?.drainPendingSaves()
+        guard needsSchedule else { return }
+        queue.asyncAfter(deadline: .now() + debounceInterval) { [weak self] in
+            self?.writePendingSnapshot()
         }
+    }
+
+    /// Synchronously write any pending snapshot. Call on app termination.
+    func flush() {
+        queue.sync { writePendingSnapshot() }
     }
 
     /// Wait for all snapshots submitted before this call. Intended for tests and orderly
     /// shutdown paths, not the UI thread during normal operation.
     func waitForPendingWrites() {
-        queue.sync {}
+        flush()
     }
 
-    private func drainPendingSaves() {
-        while true {
-            stateLock.lock()
-            guard let items = pendingItems else {
-                writerIsRunning = false
-                stateLock.unlock()
-                return
-            }
-            pendingItems = nil
-            stateLock.unlock()
+    private func writePendingSnapshot() {
+        stateLock.lock()
+        writeIsScheduled = false
+        let items = pendingItems
+        pendingItems = nil
+        stateLock.unlock()
 
-            autoreleasepool {
-                guard let data = try? encodeItems(items) else { return }
-                try? data.write(to: fileURL, options: .atomic)
-            }
+        guard let items else { return }
+        autoreleasepool {
+            guard let data = try? encodeItems(items) else { return }
+            try? data.write(to: fileURL, options: .atomic)
         }
     }
 

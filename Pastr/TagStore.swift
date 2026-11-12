@@ -47,10 +47,15 @@ final class TagStore: ObservableObject {
 
     func delete(_ tagId: UUID) {
         tags.removeAll { $0.id == tagId }
-        // Remove tag from all items
-        for key in itemTags.keys {
-            itemTags[key]?.remove(tagId)
+        // Remove tag from all items with a single publish
+        var updatedItemTags: [String: Set<UUID>] = [:]
+        updatedItemTags.reserveCapacity(itemTags.count)
+        for (fingerprint, ids) in itemTags {
+            var remaining = ids
+            remaining.remove(tagId)
+            updatedItemTags[fingerprint] = remaining
         }
+        itemTags = updatedItemTags
         // Reorder remaining tags
         for i in 0..<tags.count {
             tags[i].sortOrder = i
@@ -59,16 +64,7 @@ final class TagStore: ObservableObject {
     }
 
     func delete(_ tag: Tag) {
-        tags.removeAll { $0.id == tag.id }
-        // Remove tag from all items
-        for key in itemTags.keys {
-            itemTags[key]?.remove(tag.id)
-        }
-        // Reorder remaining tags
-        for i in 0..<tags.count {
-            tags[i].sortOrder = i
-        }
-        save()
+        delete(tag.id)
     }
 
     func reorder(from source: IndexSet, to destination: Int) {
@@ -82,18 +78,14 @@ final class TagStore: ObservableObject {
     // MARK: - Item-Tag Associations
 
     func addTag(_ tagId: UUID, to fingerprint: String) {
-        if itemTags[fingerprint] == nil {
-            itemTags[fingerprint] = []
-        }
-        itemTags[fingerprint]?.insert(tagId)
+        guard itemTags[fingerprint]?.contains(tagId) != true else { return }
+        itemTags[fingerprint, default: []].insert(tagId)
         save()
     }
 
     func removeTag(_ tagId: UUID, from fingerprint: String) {
-        itemTags[fingerprint]?.remove(tagId)
-        if itemTags[fingerprint]?.isEmpty == true {
-            itemTags.removeValue(forKey: fingerprint)
-        }
+        guard var ids = itemTags[fingerprint], ids.remove(tagId) != nil else { return }
+        itemTags[fingerprint] = ids.isEmpty ? nil : ids
         save()
     }
 
@@ -107,6 +99,16 @@ final class TagStore: ObservableObject {
 
     func removeAllTags(from fingerprint: String) {
         itemTags.removeValue(forKey: fingerprint)
+        save()
+    }
+
+    /// Drop all tag assignments for clips that no longer exist.
+    func removeAllTags(fromFingerprints fingerprints: Set<String>) {
+        guard !fingerprints.isEmpty,
+              fingerprints.contains(where: { itemTags[$0] != nil }) else { return }
+        var updated = itemTags
+        for fingerprint in fingerprints { updated.removeValue(forKey: fingerprint) }
+        itemTags = updated
         save()
     }
 
@@ -127,6 +129,11 @@ final class TagStore: ObservableObject {
 
     private func save() {
         persistence.save(tags: tags, itemTags: itemTags)
+    }
+
+    /// Block until queued writes have hit disk (app termination).
+    func flush() {
+        persistence.flush()
     }
 }
 
@@ -166,12 +173,17 @@ private final class TagPersistence {
         return (tagData.tags, tagData.toItemTags())
     }
 
+    /// Takes a value snapshot on the caller's thread (cheap, copy-on-write) and does the
+    /// JSON encode + atomic write on the background queue.
     func save(tags: [Tag], itemTags: [String: Set<UUID>]) {
-        let tagData = TagData(tags: tags, itemTags: itemTags)
-        guard let data = try? JSONEncoder().encode(tagData) else { return }
-
         queue.async { [fileURL] in
+            let tagData = TagData(tags: tags, itemTags: itemTags)
+            guard let data = try? JSONEncoder().encode(tagData) else { return }
             try? data.write(to: fileURL, options: .atomic)
         }
+    }
+
+    func flush() {
+        queue.sync {}
     }
 }

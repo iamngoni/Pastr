@@ -3,11 +3,17 @@ import Foundation
 
 final class PanelViewModel: ObservableObject {
     @Published var selectedSection: PanelSection = .history {
-        didSet { searchCriteriaDidChange() }
+        didSet {
+            guard oldValue != selectedSection else { return }
+            searchCriteriaDidChange()
+        }
     }
     @Published var selectedIndex: Int = 0
     @Published var searchText: String = "" {
-        didSet { searchCriteriaDidChange() }
+        didSet {
+            guard oldValue != searchText else { return }
+            searchCriteriaDidChange()
+        }
     }
     @Published var selectedItemIds: Set<UUID> = []
     @Published private(set) var previewItem: ClipboardItem?
@@ -27,7 +33,10 @@ final class PanelViewModel: ObservableObject {
         self.historyStore = historyStore
         items = historyStore.items(for: selectedSection)
         // Invalidate cache when history changes
+        // @Published emits in willSet; hop to the next main-loop turn so
+        // `historyStore.items(for:)` reads the new value, not the previous one.
         historyStore.$items
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.searchSourceDidChange()
             }
@@ -35,8 +44,18 @@ final class PanelViewModel: ObservableObject {
 
         // Invalidate cache when collections change
         collectionStore.$collections
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.searchSourceDidChange()
+            }
+            .store(in: &cancellables)
+
+        // Tag sections filter by tag assignments, so refresh when they change.
+        TagStore.shared.$itemTags
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, case .tag = self.selectedSection else { return }
+                self.searchSourceDidChange()
             }
             .store(in: &cancellables)
 
@@ -74,21 +93,15 @@ final class PanelViewModel: ObservableObject {
         let section = selectedSection
         let baseItems = historyStore.items(for: section)
         guard !query.isEmpty else {
-            items = baseItems
+            // ClipboardItem equality is cheap (no payload compare); avoid no-op publishes.
+            if items != baseItems {
+                items = baseItems
+            }
             return
         }
 
+        // Copy-on-write capture; lookups are built/consulted off the main thread in the search.
         let enrichments = enrichmentStore.enrichments
-        let searchableTextByFingerprint = enrichments.reduce(into: [String: String]()) { result, entry in
-            if let text = entry.value.searchableText {
-                result[entry.key] = text
-            }
-        }
-        let embeddingByFingerprint = enrichments.reduce(into: [String: [Float]]()) { result, entry in
-            if let embedding = entry.value.embedding {
-                result[entry.key] = embedding
-            }
-        }
         let semanticSearchEnabled = settings.semanticSearchEnabled
         searchTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 150_000_000)
@@ -96,8 +109,7 @@ final class PanelViewModel: ObservableObject {
             let matches = await Self.searchItems(
                 query: query,
                 baseItems: baseItems,
-                searchableTextByFingerprint: searchableTextByFingerprint,
-                embeddingByFingerprint: embeddingByFingerprint,
+                enrichments: enrichments,
                 semanticSearchEnabled: semanticSearchEnabled
             )
             guard !Task.isCancelled else { return }
@@ -105,7 +117,9 @@ final class PanelViewModel: ObservableObject {
                 guard let self,
                       self.searchText == query,
                       self.selectedSection == section else { return }
-                self.items = matches
+                if self.items != matches {
+                    self.items = matches
+                }
             }
         }
     }
@@ -113,8 +127,7 @@ final class PanelViewModel: ObservableObject {
     private nonisolated static func searchItems(
         query: String,
         baseItems: [ClipboardItem],
-        searchableTextByFingerprint: [String: String],
-        embeddingByFingerprint: [String: [Float]],
+        enrichments: [String: AIEnrichment],
         semanticSearchEnabled: Bool
     ) async -> [ClipboardItem] {
         let worker = Task.detached(priority: .userInitiated) { () -> [ClipboardItem] in
@@ -132,7 +145,7 @@ final class PanelViewModel: ObservableObject {
                     || item.fileURLs.contains {
                         $0.lastPathComponent.localizedCaseInsensitiveContains(query)
                     }
-                    || searchableTextByFingerprint[item.fingerprint]?.localizedCaseInsensitiveContains(query) == true
+                    || enrichments[item.fingerprint]?.searchableText?.localizedCaseInsensitiveContains(query) == true
                 if matchesMetadata {
                     literalMatches.append(item)
                 }
@@ -149,7 +162,7 @@ final class PanelViewModel: ObservableObject {
             var semanticMatches: [(item: ClipboardItem, score: Float)] = []
             for (index, item) in baseItems.enumerated() where !literalIds.contains(item.id) {
                 if index.isMultiple(of: 64), Task.isCancelled { return [] }
-                guard let vector = embeddingByFingerprint[item.fingerprint] else { continue }
+                guard let vector = enrichments[item.fingerprint]?.embedding else { continue }
                 let score = SemanticIndex.similarity(queryVector, vector)
                 if score >= SemanticIndex.matchThreshold {
                     semanticMatches.append((item, score))

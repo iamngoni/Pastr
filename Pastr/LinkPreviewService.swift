@@ -40,6 +40,8 @@ final class LinkPreviewService: ObservableObject {
     func fetchPreview(for urlString: String) {
         // Check if link previews are disabled in settings
         guard SettingsStore.shared.generateLinkPreviews else {
+            // Never re-publish an entry that already exists: every observing card would redraw.
+            guard previews[urlString] == nil else { return }
             // Just set a basic preview with domain only, no network request
             let basicPreview = LinkPreview(
                 url: urlString,
@@ -47,6 +49,7 @@ final class LinkPreviewService: ObservableObject {
                 siteName: extractDomain(from: urlString)
             )
             DispatchQueue.main.async {
+                guard self.previews[urlString] == nil else { return }
                 self.previews[urlString] = basicPreview
                 self.trimPreviewsIfNeeded()
             }
