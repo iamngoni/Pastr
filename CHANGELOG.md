@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6 (2026-11-12)
+- Redesigned clipboard panel: a cleaner dark-glass look, a centred section switcher, and a clip count.
+- Cards now show the source app's icon, a coloured type badge, file names for file clips, and styled code snippets.
+- Tags and collections moved to a card footer; the pin button appears on hover.
+- New empty states for history, search, collections and tags.
+- The panel now looks right in light mode.
+- Fixed launch hangs on memory-constrained Macs by building the panel after launch.
+- Lower memory use: image previews decode at card size.
+- Fewer disk writes: history and intelligence data are saved in batches.
+- Fixed the newest clip sometimes not appearing until the panel refreshed.
+- Pasted images work in more apps, including Slack and browsers.
+- Intelligence data and tags are cleaned up when clips are removed.
+
 ## v1.5 (2026-08-31)
 - Moved clipboard search and semantic matching off the main thread.
 - Moved CloudKit, on-device intelligence persistence, and image preview decoding off the main thread.

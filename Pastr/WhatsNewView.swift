@@ -65,7 +65,7 @@ struct WhatsNewView: View {
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
 
-                Text("Faster, smoother, and more reliable")
+                Text("A refreshed panel, faster and lighter")
                     .font(.system(size: 14))
                     .foregroundColor(Color(red: 0.56, green: 0.56, blue: 0.58))
             }
@@ -125,21 +125,21 @@ struct WhatsNewView: View {
     }
 
     static let highlights: [Highlight] = [
-        Highlight(icon: "text.magnifyingglass",
-                  title: "Responsive Search",
-                  description: "Large clipboard histories stay responsive while exact and semantic search run in the background"),
-        Highlight(icon: "icloud",
-                  title: "Smoother Sync",
-                  description: "CloudKit startup and history merging no longer hold up the panel"),
-        Highlight(icon: "photo",
-                  title: "Faster Image Previews",
-                  description: "Image clips decode away from the main thread for smoother scrolling"),
-        Highlight(icon: "rectangle.stack",
-                  title: "Stable Large Histories",
-                  description: "Clipboard and intelligence updates are batched to reduce unnecessary interface refreshes"),
+        Highlight(icon: "rectangle.on.rectangle",
+                  title: "A Fresh Look",
+                  description: "A cleaner dark-glass panel with source app icons, colour-coded clip types, and tidier cards"),
+        Highlight(icon: "doc.on.clipboard",
+                  title: "Clearer Clips",
+                  description: "Code snippets, file names, tags and collections are easier to read at a glance"),
+        Highlight(icon: "bolt",
+                  title: "Faster Launch",
+                  description: "Pastr starts without stalling, even on Macs that are low on memory"),
+        Highlight(icon: "memorychip",
+                  title: "Lighter on Memory",
+                  description: "Image previews are decoded at card size and history is saved in efficient batches"),
         Highlight(icon: "bolt.shield",
                   title: "Reliability Fixes",
-                  description: "Resolved startup, rich-text, search-field, display, and preview hangs reported from production"),
+                  description: "Fixed the newest clip occasionally missing and image pasting in apps like Slack, plus hangs reported from production"),
     ]
 }
 
